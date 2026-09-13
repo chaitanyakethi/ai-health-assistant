@@ -33,9 +33,10 @@ streamlit run app.py
 Then open the printed local URL (usually `http://localhost:8501`).
 
 **The 45-second demo path:**
-1. **Vitals tab** — all green. Click **"🎬 Scenario: Emergency"** in the sidebar → watch the gauge slam to 🔴 Critical 100/100.
-2. **Report Translator tab** — paste the sample lab text → plain-English split view.
-3. **Symptom Chat tab** — try *"crushing chest pain"* (🔴) vs *"runny nose and cough"* (🟢).
+1. **Vitals tab** — all green. Click **"🚨 Emergency"** in the sidebar → the banner slams to 🚨 EMERGENCY 100/100.
+2. **Medications tab** — next-dose countdown, status pills (DUE NOW / SCHEDULED / TAKEN), mark a dose taken → adherence ring fills.
+3. **AI Doctor · 24/7 tab** — type *"crushing chest pain"* (🔴 CRITICAL RISK) vs *"runny nose and cough"* (🟢 LOW RISK).
+4. **Report Translator tab** — paste the sample lab text → plain-English split view.
 
 ## 🧪 Tests
 
@@ -57,7 +58,8 @@ npm start        # scan QR with the Expo Go app, or press w for web
 
 - [x] Deterministic triage engine with red-flag override
 - [x] Lab report translator (PDF/text → plain English)
-- [x] Symptom triage chat with risk-level tags
+- [x] AI Doctor chat — always-on symptom triage with risk-level pills
+- [x] Medication reminders — schedule, taken/missed tracking, adherence ring
 - [ ] Wearable API ingestion (HealthKit / Health Connect)
 - [ ] Fine-tuned medical LLM translation layer (Med42/OpenBioLLM)
 - [ ] Clinician review mode + hospital pilot

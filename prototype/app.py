@@ -4,10 +4,13 @@ AI Health Assistance — Live Dashboard Prototype
 Run:  streamlit run app.py
 
 Visual-first dashboard: glance → understand → act.
+Tabs: Vitals · Medication Reminders · AI Doctor (24/7) · Report Translator.
 Stack: Streamlit + Plotly (all logic offline & deterministic).
 """
 
 from __future__ import annotations
+
+from datetime import datetime, time, timedelta
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -71,9 +74,9 @@ st.markdown(
         font-weight: 800; line-height: 1;
       }
       .chip {
-        background: white; border: 1px solid rgba(148,163,184,.35);
+        background: white; color:#0f172a; border: 1px solid rgba(148,163,184,.35);
         border-radius: 999px; padding: 8px 16px; text-align: center;
-        font-weight: 700; font-size: .95rem; color: #0f172a;
+        font-weight: 700; font-size: .95rem;
         box-shadow: 0 1px 3px rgba(15,23,42,.06);
       }
       .vital-card {
@@ -85,14 +88,31 @@ st.markdown(
       .vital-label {font-size: .85rem; font-weight: 700; opacity: .8;}
       .vital-status {font-size: .9rem; font-weight: 800; margin-top: 2px;}
       .tag {border-radius: 999px; padding: 3px 12px; font-size: .8rem; font-weight: 800; color: white; display: inline-block;}
-      .chat-user {background: #dbeafe; border-radius: 14px 14px 4px 14px; padding: 10px 14px; margin: 6px 40px 6px 0;}
-      .chat-bot  {background: white; color: #0f172a; border: 1px solid rgba(148,163,184,.3); border-radius: 14px 14px 14px 4px; padding: 12px 14px; margin: 6px 0 6px 40px; box-shadow: 0 1px 3px rgba(15,23,42,.06);}
+      .med-card {
+        background: white; color: #0f172a; border-radius: 16px; padding: 14px 16px;
+        border: 1px solid rgba(148,163,184,.28); border-left: 6px solid #3b82f6;
+        box-shadow: 0 2px 6px rgba(15,23,42,.06);
+      }
+      .med-name {font-size: 1.25rem; font-weight: 900;}
+      .med-meta {font-size: .95rem; font-weight: 700; opacity: .75; margin-top: 2px;}
       .lab-row {
         background: white; color: #0f172a; border: 1px solid rgba(148,163,184,.28); border-radius: 14px;
         padding: 12px 16px; margin: 8px 0; box-shadow: 0 1px 3px rgba(15,23,42,.06);
       }
       .lab-name {font-size: 1.2rem; font-weight: 900;}
       .lab-why {font-size: .9rem; margin-top: 4px; color: #334155;}
+      .chat-user {background: #dbeafe; color:#0f172a; border-radius: 14px 14px 4px 14px; padding: 10px 14px; margin: 6px 40px 6px 0;}
+      .chat-bot  {background: white; color: #0f172a; border: 1px solid rgba(148,163,184,.3); border-radius: 14px 14px 14px 4px; padding: 12px 14px; margin: 6px 0 6px 40px; box-shadow: 0 1px 3px rgba(15,23,42,.06);}
+      .doc-online {
+        width: 12px; height: 12px; border-radius: 50%; background: #22c55e;
+        display: inline-block; margin-right: 8px;
+        box-shadow: 0 0 0 rgba(34,197,94,.6); animation: pulse 1.6s infinite;
+      }
+      @keyframes pulse {
+        0% {box-shadow: 0 0 0 0 rgba(34,197,94,.55);}
+        70% {box-shadow: 0 0 0 10px rgba(34,197,94,0);}
+        100% {box-shadow: 0 0 0 0 rgba(34,197,94,0);}
+      }
       .stTabs [data-baseweb="tab"] {font-size: 1.05rem; font-weight: 700; gap: 6px;}
     </style>
     """,
@@ -111,17 +131,25 @@ DEFAULT_VITALS = {
     "sleep": 7.5,
 }
 
+DEFAULT_MEDS = [
+    {"id": 1, "name": "Metformin 500mg", "times": ["08:00", "20:00"], "icon": "💊", "taken": set(), "missed": set()},
+    {"id": 2, "name": "Vitamin D3", "times": ["09:00"], "icon": "☀️", "taken": set(), "missed": set()},
+    {"id": 3, "name": "Amlodipine 5mg", "times": ["21:00"], "icon": "🫀", "taken": set(), "missed": set()},
+]
+
 if "vitals" not in st.session_state:
     st.session_state.vitals = dict(DEFAULT_VITALS)
+if "meds" not in st.session_state:
+    st.session_state.meds = [dict(m) for m in DEFAULT_MEDS]
 if "chat" not in st.session_state:
     st.session_state.chat = [
-        {"role": "bot", "text": "👋 Tell me how you feel — I'll tell you how urgent it is.", "level": None}
+        {"role": "bot", "text": "👋 I'm your AI Doctor — online 24/7. Tell me what's wrong.", "level": None}
     ]
 if "report" not in st.session_state:
     st.session_state.report = None
 
 # ---------------------------------------------------------------------------
-# Sidebar — 3 big demo buttons
+# Helpers
 # ---------------------------------------------------------------------------
 def apply_scenario(**values: float) -> None:
     """Update vitals AND the slider widgets' own state (keeps them in sync)."""
@@ -130,6 +158,50 @@ def apply_scenario(**values: float) -> None:
         st.session_state[f"s_{key}"] = float(value)
 
 
+def _parse_hhmm(hhmm: str) -> time:
+    h, m = hhmm.split(":")
+    return time(int(h), int(m))
+
+
+def _med_state(med: dict, now: datetime) -> str:
+    """Return 'taken' | 'due' | 'upcoming' | 'missed' for display."""
+    today = now.date()
+    if today in med["taken"]:
+        return "taken"
+    if today in med["missed"]:
+        return "missed"
+    for hhmm in med["times"]:
+        due_dt = datetime.combine(today, _parse_hhmm(hhmm))
+        if now >= due_dt:
+            return "due"  # a dose time has passed today and not marked taken
+    return "upcoming"
+
+
+def _next_dose(meds: list[dict], now: datetime) -> tuple[str, str] | None:
+    """Soonest upcoming dose across all meds → (name, HH:MM)."""
+    best = None
+    for med in meds:
+        for hhmm in med["times"]:
+            dt = datetime.combine(now.date(), _parse_hhmm(hhmm))
+            if dt < now:
+                dt += timedelta(days=1)  # tomorrow's dose
+            if best is None or dt < best[0]:
+                best = (dt, med["name"], hhmm)
+    if best is None:
+        return None
+    dt, name, hhmm = best
+    delta = dt - now
+    hours, rem = divmod(int(delta.total_seconds()), 3600)
+    minutes = rem // 60
+    when = f"in {hours}h {minutes:02d}m" if hours else f"in {minutes} min"
+    return name, f"{hhmm} ({when})"
+
+
+NOW = datetime.now()
+
+# ---------------------------------------------------------------------------
+# Sidebar — demo controls + med quick-view
+# ---------------------------------------------------------------------------
 with st.sidebar:
     st.title("🩺 AI Health")
     st.caption("**See it. Understand it. Act fast.**")
@@ -149,10 +221,13 @@ with st.sidebar:
         apply_scenario(**DEFAULT_VITALS)
         st.rerun()
     st.divider()
+    nxt = _next_dose(st.session_state.meds, NOW)
+    if nxt:
+        st.markdown(f"⏰ **Next dose:** {nxt[0]} · {nxt[1]}")
     st.caption("⚠️ Educational demo — not a medical device.")
 
 # ---------------------------------------------------------------------------
-# Giant verdict banner + 3 "what is this" chips
+# Giant verdict banner + quick chips
 # ---------------------------------------------------------------------------
 result = composite_triage(st.session_state.vitals)
 emoji, word, action = BANNER[result.level]
@@ -172,20 +247,26 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.markdown('<div class="chip">👀 &nbsp;Vitals at a glance</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chip">👀 Vitals live</div>', unsafe_allow_html=True)
 with c2:
-    st.markdown('<div class="chip">📄 &nbsp;Lab jargon ➜ plain English</div>', unsafe_allow_html=True)
+    nxt = _next_dose(st.session_state.meds, NOW)
+    st.markdown(
+        f'<div class="chip">⏰ Next pill: {nxt[1] if nxt else "none set"}</div>',
+        unsafe_allow_html=True,
+    )
 with c3:
-    st.markdown('<div class="chip">💬 &nbsp;Symptoms ➜ next step</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chip">👨‍⚕️ AI Doctor online 24/7</div>', unsafe_allow_html=True)
+with c4:
+    st.markdown('<div class="chip">📄 Lab jargon ➜ plain English</div>', unsafe_allow_html=True)
 st.write("")
 
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_vitals, tab_report, tab_chat = st.tabs(
-    ["📡 Vitals", "📄 Report Translator", "💬 Symptom Chat"]
+tab_vitals, tab_meds, tab_doc, tab_report = st.tabs(
+    ["📡 Vitals", "💊 Medications", "👨‍⚕️ AI Doctor · 24/7", "📄 Report Translator"]
 )
 
 # === TAB 1 — VITALS =========================================================
@@ -282,7 +363,7 @@ with tab_vitals:
                     _, dot = STATUS_COLOR[level]
                     st.markdown(f"- {dot} {reason}")
         else:
-            st.success("✅ All 6 vitals inside normal bands — nothing to explain, nothing to worry about.")
+            st.success("✅ All 6 vitals inside normal bands — nothing to worry about.")
 
         st.markdown("##### 📈 Last 24 hours")
         trend_fig = go.Figure()
@@ -300,7 +381,183 @@ with tab_vitals:
         trend_fig.update_layout(height=200, margin=dict(t=10, b=10, l=10, r=10))
         st.plotly_chart(trend_fig, width='stretch')
 
-# === TAB 2 — REPORT TRANSLATOR ==============================================
+# === TAB 2 — MEDICATION REMINDERS ===========================================
+with tab_meds:
+    now_med = datetime.now()
+    nxt = _next_dose(st.session_state.meds, now_med)
+
+    # Headline: next dose countdown — the thing you glance at.
+    if nxt:
+        st.markdown(
+            f"""
+            <div class="verdict" style="background: linear-gradient(120deg, #3b82f6, #6366f1); padding:16px 24px;">
+              <div style="font-size:2.8rem; line-height:1;">⏰</div>
+              <div style="flex:1;">
+                <div class="verdict-word" style="font-size:2rem;">NEXT DOSE</div>
+                <div class="verdict-action">{nxt[0]} at {nxt[1]}</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.write("")
+
+    add_col, list_col = st.columns([1, 3], gap="large")
+
+    with add_col:
+        st.markdown("##### ➕ Add medicine")
+        m_name = st.text_input("Medicine name", placeholder="e.g. Paracetamol 650mg")
+        m_times = st.multiselect(
+            "Times per day",
+            options=[f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 30)],
+            default=["08:00"],
+        )
+        m_icon = st.selectbox("Icon", ["💊", "🫀", "☀️", "💉", "🧪", "🩹"])
+        if st.button("➕ Add", type="primary", width='stretch') and m_name.strip() and m_times:
+            new_id = max((m["id"] for m in st.session_state.meds), default=0) + 1
+            st.session_state.meds.append(
+                {"id": new_id, "name": m_name.strip(), "times": sorted(m_times), "icon": m_icon, "taken": set(), "missed": set()}
+            )
+            st.rerun()
+
+    with list_col:
+        st.markdown("##### 💊 Today's schedule")
+        if not st.session_state.meds:
+            st.info("No medicines yet — add one on the left.")
+        now_m = datetime.now()
+        for med in st.session_state.meds:
+            state = _med_state(med, now_m)
+            badge = {
+                "taken": '<span class="tag" style="background:#16a34a;">✅ TAKEN</span>',
+                "due": '<span class="tag" style="background:#f59e0b;">⏰ DUE NOW</span>',
+                "missed": '<span class="tag" style="background:#dc2626;">❌ MISSED</span>',
+                "upcoming": '<span class="tag" style="background:#3b82f6;">🕒 SCHEDULED</span>',
+            }[state]
+            times_text = " · ".join(med["times"])
+            st.markdown(
+                f"""
+                <div class="med-card" style="border-left-color:{"#16a34a" if state == "taken" else "#f59e0b" if state == "due" else "#dc2626" if state == "missed" else "#3b82f6"};">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="med-name">{med["icon"]} {med["name"]}</div>
+                    {badge}
+                  </div>
+                  <div class="med-meta">🕒 {times_text}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            b1, b2, _ = st.columns([1, 1, 2])
+            if b1.button("✅ Taken", key=f"take_{med['id']}", width='stretch'):
+                med["taken"].add(now_m.date())
+                med["missed"].discard(now_m.date())
+                st.rerun()
+            if b2.button("❌ Skip", key=f"skip_{med['id']}", width='stretch'):
+                med["missed"].add(now_m.date())
+                med["taken"].discard(now_m.date())
+                st.rerun()
+
+        # Adherence ring: taken vs missed vs scheduled today.
+        total_doses = sum(len(m["times"]) for m in st.session_state.meds)
+        done_doses = sum(1 for m in st.session_state.meds if now_m.date() in m["taken"])
+        pct = int(100 * done_doses / total_doses) if total_doses else 100
+        st.markdown("##### 📊 Today's adherence")
+        a1, a2 = st.columns([1, 2])
+        with a1:
+            adh = go.Figure(
+                go.Indicator(
+                    mode="gauge+number",
+                    value=pct,
+                    number={"suffix": "%", "font": {"size": 34}},
+                    gauge={
+                        "axis": {"range": [0, 100], "showticklabels": False},
+                        "bar": {"color": "#16a34a" if pct >= 80 else "#f59e0b" if pct >= 50 else "#dc2626", "thickness": 0.3},
+                        "steps": [
+                            {"range": [0, 50], "color": "rgba(220,38,38,.25)"},
+                            {"range": [50, 80], "color": "rgba(245,158,11,.25)"},
+                            {"range": [80, 100], "color": "rgba(22,163,74,.30)"},
+                        ],
+                    },
+                )
+            )
+            adh.update_layout(height=180, margin=dict(t=10, b=10, l=20, r=20))
+            st.plotly_chart(adh, width='stretch')
+        with a2:
+            st.markdown(
+                f'<div class="chip" style="font-size:1.05rem;">✅ {done_doses} of {total_doses} doses taken today</div>',
+                unsafe_allow_html=True,
+            )
+            if pct < 100 and total_doses:
+                st.markdown("- Doses tick **✅ Taken** as you swallow them.")
+                st.markdown("- The ring turns **green at 80%** — your daily goal.")
+
+# === TAB 3 — AI DOCTOR 24/7 =================================================
+with tab_doc:
+    st.markdown(
+        """
+        <div class="verdict" style="background: linear-gradient(120deg, #0ea5e9, #6366f1); padding:14px 22px;">
+          <div style="font-size:2.6rem; line-height:1;">👨‍⚕️</div>
+          <div style="flex:1;">
+            <div class="verdict-word" style="font-size:1.9rem;">AI DOCTOR <span class="doc-online"></span>ONLINE</div>
+            <div class="verdict-action">Always here — 24 hours · 7 days · no appointment needed</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.write("")
+
+    d_left, d_right = st.columns([3, 2], gap="large")
+    with d_left:
+        for msg in st.session_state.chat:
+            if msg["role"] == "user":
+                st.markdown(f'<div class="chat-user">🧑 <b>You:</b> {msg["text"]}</div>', unsafe_allow_html=True)
+            else:
+                level = msg.get("level")
+                if level:
+                    pill = (
+                        f'<span class="tag" style="background:{LEVEL_COLOR[level]}; font-size:.9rem; '
+                        f'padding:4px 14px;">{LEVEL_EMOJI[level]} {level.upper()} RISK</span>'
+                    )
+                else:
+                    pill = ""
+                st.markdown(
+                    f'<div class="chat-bot">🩺 {pill}<br><br>{msg["text"]}</div>',
+                    unsafe_allow_html=True,
+                )
+
+        quick_cols = st.columns(4)
+        quick_prompts = [
+            "🚨 Crushing chest pain",
+            "🌡️ Mild fever since yesterday",
+            "😵 Tired and dizzy for a week",
+            "🤧 Runny nose and cough",
+        ]
+        picked = None
+        for col, prompt in zip(quick_cols, quick_prompts):
+            if col.button(prompt, key=f"doc_{prompt}", width='stretch'):
+                picked = prompt
+
+        user_input = st.chat_input("Type your symptoms — the doctor never sleeps…") or picked
+        if user_input:
+            st.session_state.chat.append({"role": "user", "text": user_input})
+            verdict = triage_symptoms(user_input)
+            st.session_state.chat.append({"role": "bot", "text": verdict.reply, "level": verdict.level})
+            st.rerun()
+
+    with d_right:
+        st.markdown("##### 🕐 Always-on availability")
+        for label, sub in [
+            ("🌙 Midnight", "Online"),
+            ("🌅 Early morning", "Online"),
+            ("☀️ Afternoon", "Online"),
+            ("🌙 Late night", "Online"),
+        ]:
+            st.markdown(f"- <span class='doc-online'></span> **{label}** — {sub}", unsafe_allow_html=True)
+        st.markdown("##### 🚨 Escalation built-in")
+        st.markdown("- Red-flag symptoms flip the chat to **CRITICAL RISK** instantly.")
+        st.markdown("- Verdicts come from the same explainable triage engine as the Vitals tab.")
+
+# === TAB 4 — REPORT TRANSLATOR ==============================================
 with tab_report:
     st.markdown("##### 🧾 Lab report ➜ 💬 plain English")
 
@@ -324,7 +581,7 @@ with tab_report:
         if n_ab == 0 and n_all:
             banner = '<div class="verdict" style="background:#16a34a; padding:14px 20px; gap:14px;"><div style="font-size:2.4rem;">🎉</div><div class="verdict-word" style="font-size:1.8rem;">ALL CLEAR</div><div class="verdict-action">Every marker is inside the normal range.</div></div>'
         elif n_all:
-            banner = f'<div class="verdict" style="background:#f59e0b; padding:14px 20px; gap:14px;"><div style="font-size:2.4rem;">📋</div><div class="verdict-word" style="font-size:1.8rem;">{n_ab} of {n_all} NEED A LOOK</div><div class="verdict-action">Tap each line below to see what it means.</div></div>'
+            banner = f'<div class="verdict" style="background:#f59e0b; padding:14px 20px; gap:14px;"><div style="font-size:2.4rem;">📋</div><div class="verdict-word" style="font-size:1.8rem;">{n_ab} of {n_all} NEED A LOOK</div><div class="verdict-action">Each line below shows what it means.</div></div>'
         else:
             banner = '<div class="verdict" style="background:#64748b; padding:14px 20px;"><div class="verdict-action">🤔 No known lab markers found — try the sample text on the right.</div></div>'
         st.markdown(banner, unsafe_allow_html=True)
@@ -352,44 +609,6 @@ with tab_report:
             )
     else:
         st.caption("👆 Upload or paste a report — results appear here instantly.")
-
-# === TAB 3 — SYMPTOM CHAT ===================================================
-with tab_chat:
-    for msg in st.session_state.chat:
-        if msg["role"] == "user":
-            st.markdown(f'<div class="chat-user">🧑 <b>You:</b> {msg["text"]}</div>', unsafe_allow_html=True)
-        else:
-            level = msg.get("level")
-            if level:
-                pill = (
-                    f'<span class="tag" style="background:{LEVEL_COLOR[level]}; font-size:.9rem; '
-                    f'padding:4px 14px;">{LEVEL_EMOJI[level]} {level.upper()} RISK</span>'
-                )
-            else:
-                pill = ""
-            st.markdown(
-                f'<div class="chat-bot">🩺 {pill}<br><br>{msg["text"]}</div>',
-                unsafe_allow_html=True,
-            )
-
-    quick_cols = st.columns(4)
-    quick_prompts = [
-        "🚨 Crushing chest pain",
-        "🌡️ Mild fever since yesterday",
-        "😵 Tired and dizzy for a week",
-        "🤧 Runny nose and cough",
-    ]
-    picked = None
-    for col, prompt in zip(quick_cols, quick_prompts):
-        if col.button(prompt, width='stretch'):
-            picked = prompt
-
-    user_input = st.chat_input("Type your symptoms…") or picked
-    if user_input:
-        st.session_state.chat.append({"role": "user", "text": user_input})
-        verdict = triage_symptoms(user_input)
-        st.session_state.chat.append({"role": "bot", "text": verdict.reply, "level": verdict.level})
-        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Footer
