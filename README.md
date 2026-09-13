@@ -36,7 +36,8 @@ Then open the printed local URL (usually `http://localhost:8501`).
 1. **Vitals tab** — all green. Click **"🚨 Emergency"** in the sidebar → the banner slams to 🚨 EMERGENCY 100/100.
 2. **Medications tab** — next-dose countdown, status pills (DUE NOW / SCHEDULED / TAKEN), mark a dose taken → adherence ring fills.
 3. **AI Doctor · 24/7 tab** — type *"crushing chest pain"* (🔴 CRITICAL RISK) vs *"runny nose and cough"* (🟢 LOW RISK).
-4. **Report Translator tab** — paste the sample lab text → plain-English split view.
+4. **Recovery Tracker tab** — enroll a disease + medicine, use ⏩ time-travel: month-1 check-up notification fires → submit review → cured? discharged : re-checked every 3 months.
+5. **Report Translator tab** — paste the sample lab text → plain-English split view.
 
 ## 🧪 Tests
 
@@ -60,6 +61,7 @@ npm start        # scan QR with the Expo Go app, or press w for web
 - [x] Lab report translator (PDF/text → plain English)
 - [x] AI Doctor chat — always-on symptom triage with risk-level pills
 - [x] Medication reminders — schedule, taken/missed tracking, adherence ring
+- [x] Recovery Tracker — auto check-ups at 1 & 6 months, cure verification, 3-month re-check loop
 - [ ] Wearable API ingestion (HealthKit / Health Connect)
 - [ ] Fine-tuned medical LLM translation layer (Med42/OpenBioLLM)
 - [ ] Clinician review mode + hospital pilot
