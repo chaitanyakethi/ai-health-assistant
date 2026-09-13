@@ -44,3 +44,9 @@ example
 
 # Codebuff workspace metadata
 .freebuff/
+
+# Python prototype
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/

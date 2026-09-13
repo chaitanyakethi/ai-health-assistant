@@ -1,0 +1,4 @@
+streamlit>=1.49,<2
+plotly>=6,<8
+pypdf>=6,<7
+pytest>=8,<9

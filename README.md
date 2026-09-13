@@ -1,56 +1,63 @@
-# Welcome to your Expo app 👋
+# 🩺 AI Health Assistance
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**Decodes medical jargon • Triages symptoms • Visualises vital health metrics — in real time.**
 
-## Get started
+> Patients don't die from lack of information — they die from information they can't understand and can't act on. AI Health Assistance turns panic into a plan.
 
-1. Install dependencies
+> ⚕️ **Educational prototype — not a medical device.** In an emergency, always contact local emergency services.
 
-   ```bash
-   npm install
-   ```
+---
 
-2. Start the app
+## 📁 Submission Kit (Tech Expo)
 
-   ```bash
-   npx expo start
-   ```
+| Module | File | What's inside |
+|---|---|---|
+| 1. Championship Pitch | [`docs/01_pitch_and_story.md`](docs/01_pitch_and_story.md) | Problem/solution, "Why We Win", 2-minute judge script |
+| 2. Dashboard UI Blueprint | [`docs/02_dashboard_ui_blueprint.md`](docs/02_dashboard_ui_blueprint.md) | Layout architecture, vitals cards, translator widget, triage gauge |
+| 3. Runnable Prototype | [`prototype/`](prototype/) | **Live Streamlit + Plotly dashboard** (below) |
+| 4. Architecture & Stack | [`docs/03_architecture_and_stack.md`](docs/03_architecture_and_stack.md) | ASCII data-flow diagram, full tech stack, HIPAA controls |
+| 5. Judge Defense Matrix | [`docs/04_judge_defense_matrix.md`](docs/04_judge_defense_matrix.md) | 5 hardest questions + confident answers |
 
-In the output, you'll find options to open the app in a
+## 🚀 Run the Live Prototype (Module 3)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Requires Python 3.11+.
 
 ```bash
-npm run reset-project
+cd prototype
+python -m venv .venv
+.venv\Scripts\activate            # Windows   (macOS/Linux: source .venv/bin/activate)
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Then open the printed local URL (usually `http://localhost:8501`).
 
-### Other setup steps
+**The 45-second demo path:**
+1. **Vitals tab** — all green. Click **"🎬 Scenario: Emergency"** in the sidebar → watch the gauge slam to 🔴 Critical 100/100.
+2. **Report Translator tab** — paste the sample lab text → plain-English split view.
+3. **Symptom Chat tab** — try *"crushing chest pain"* (🔴) vs *"runny nose and cough"* (🟢).
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## 🧪 Tests
 
-## Learn more
+```bash
+cd prototype
+.venv\Scripts\python -m pytest test_core.py -q     # 8 tests — triage + translator logic
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## 📱 Mobile App (this repo)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+The repo also hosts the **React Native (Expo SDK 57)** front-end that mirrors this design system on mobile:
 
-## Join the community
+```bash
+npm install
+npm start        # scan QR with the Expo Go app, or press w for web
+```
 
-Join our community of developers creating universal apps.
+## 🗺️ Roadmap
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [x] Deterministic triage engine with red-flag override
+- [x] Lab report translator (PDF/text → plain English)
+- [x] Symptom triage chat with risk-level tags
+- [ ] Wearable API ingestion (HealthKit / Health Connect)
+- [ ] Fine-tuned medical LLM translation layer (Med42/OpenBioLLM)
+- [ ] Clinician review mode + hospital pilot
