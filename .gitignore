@@ -50,3 +50,6 @@ example
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Local account store (hashed passwords) — never commit
+prototype/users.json

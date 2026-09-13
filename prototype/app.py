@@ -10,6 +10,8 @@ Stack: Streamlit + Plotly (all logic offline & deterministic).
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -297,10 +299,95 @@ EXAMPLE_CASES = {
 NOW = datetime.now()
 
 # ---------------------------------------------------------------------------
+# Authentication — local account store (hashed passwords, demo-grade)
+# ---------------------------------------------------------------------------
+USERS_FILE = Path(__file__).parent / "users.json"
+
+
+def _hash(pw: str) -> str:
+    return hashlib.sha256(pw.encode()).hexdigest()
+
+
+def _load_users() -> dict:
+    if USERS_FILE.exists():
+        return json.loads(USERS_FILE.read_text(encoding="utf-8"))
+    return {}
+
+
+def _save_users(users: dict) -> None:
+    USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+
+
+def _login_success(name: str) -> None:
+    st.session_state.authenticated = True
+    st.session_state.who = name
+    # Fresh, per-user workspace on every login.
+    for key in ("vitals", "meds", "chat", "recovery", "report"):
+        st.session_state.pop(key, None)
+    st.rerun()
+
+
+def _render_auth() -> None:
+    st.markdown('<div style="height:7vh"></div>', unsafe_allow_html=True)
+    _l, mid, _r = st.columns([1, 1.7, 1])
+    with mid:
+        st.markdown(
+            '<div style="text-align:center; padding:10px 0 2px;">'
+            '<div style="font-size:3rem;">🩺</div>'
+            '<div style="font-size:1.9rem; font-weight:800; color:#0f172a;">AI Health Assistance</div>'
+            '<div style="font-size:.95rem; color:#64748b;">Your health, decoded — vitals, medicines, recovery & reports</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.write("")
+        tab_login, tab_signup = st.tabs(["Login", "Create account"])
+        users = _load_users()
+
+        with tab_login:
+            with st.form("login_form", border=True):
+                lu = st.text_input("Username", key="login_user")
+                lp = st.text_input("Password", type="password", key="login_pw")
+                if st.form_submit_button("Login", type="primary", width='stretch'):
+                    user = users.get(lu.strip().lower())
+                    if user and user["pw"] == _hash(lp):
+                        _login_success(user["name"])
+                    else:
+                        st.error("❌ Wrong username or password — try again, or create an account.")
+
+        with tab_signup:
+            with st.form("signup_form", border=True):
+                su_name = st.text_input("Full name", key="su_name")
+                su_user = st.text_input("Choose a username", key="su_user")
+                sp1 = st.text_input("Password", type="password", key="su_pw")
+                sp2 = st.text_input("Confirm password", type="password", key="su_pw2")
+                if st.form_submit_button("✅ Create account", type="primary", width='stretch'):
+                    uname = su_user.strip().lower()
+                    if not su_name.strip() or not uname:
+                        st.error("Please fill your name and a username.")
+                    elif len(sp1) < 4:
+                        st.error("Password needs at least 4 characters.")
+                    elif sp1 != sp2:
+                        st.error("Passwords do not match.")
+                    elif uname in users:
+                        st.error("That username is taken — pick another.")
+                    else:
+                        users[uname] = {"name": su_name.strip(), "pw": _hash(sp1)}
+                        _save_users(users)
+                        _login_success(su_name.strip())
+
+        st.caption("🔒 Demo sign-in — passwords are hashed and stored only on this device.")
+
+
+if not st.session_state.get("authenticated"):
+    _render_auth()
+    st.stop()
+
+# ---------------------------------------------------------------------------
 # Sidebar — demo controls + med quick-view
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.title("🩺 AI Health")
+    st.caption(f"👤 **{st.session_state.get('who', 'Guest')}**")
     st.caption("**See it. Understand it. Act fast.**")
     st.divider()
     st.subheader("One-click demos")
@@ -321,6 +408,9 @@ with st.sidebar:
     nxt = _next_dose(st.session_state.meds, NOW)
     if nxt:
         st.markdown(f"⏰ **Next dose:** {nxt[0]} · {nxt[1]}")
+    if st.button("🚪 Logout", width='stretch'):
+        st.session_state.authenticated = False
+        st.rerun()
     rec = st.session_state.recovery
     if rec and rec["status"] == "cured":
         st.markdown("🎉 **Recovery:** Cured & discharged")
