@@ -758,8 +758,8 @@ with tab_meds:
         st.markdown("##### ➕ Add medicine")
         m_name = st.text_input("Medicine name", placeholder="e.g. Paracetamol 650mg")
         m_times = st.multiselect(
-            "Times per day",
-            options=[f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 30)],
+            "Times per day (5-minute steps — type to search, e.g. 16:05)",
+            options=[f"{h:02d}:{m:02d}" for h in range(24) for m in range(0, 60, 5)],
             default=["08:00"],
         )
         m_icon = st.selectbox("Icon", ["💊", "🫀", "☀️", "💉", "🧪", "🩹"])
