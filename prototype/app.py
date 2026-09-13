@@ -84,23 +84,35 @@ if "report" not in st.session_state:
 # ---------------------------------------------------------------------------
 # Sidebar — demo controls
 # ---------------------------------------------------------------------------
+def apply_scenario(**values: float) -> None:
+    """Update vitals AND the slider widgets' own state.
+
+    Without seeding the ``s_*`` widget keys, sliders would silently restore
+    their previous values on the next rerun and clobber the scenario
+    (button says Critical, sliders say healthy). Seeding keeps them in sync.
+    """
+    st.session_state.vitals.update(values)
+    for key, value in values.items():
+        st.session_state[f"s_{key}"] = float(value)
+
+
 with st.sidebar:
     st.title("🩺 AI Health Assistance")
     st.caption("Decodes jargon • Triages symptoms • Visualises vitals")
     st.divider()
     st.subheader("Demo controls")
     if st.button("🎬 Scenario: Emergency (low O₂ + high BP)", width='stretch'):
-        st.session_state.vitals.update(
+        apply_scenario(
             heart_rate=122.0, spo2=87.0, systolic=185.0, diastolic=115.0, temperature=101.8, sleep=4.0
         )
         st.rerun()
     if st.button("⚠️ Scenario: Watch-list (slightly off)", width='stretch'):
-        st.session_state.vitals.update(
+        apply_scenario(
             heart_rate=104.0, spo2=93.0, systolic=138.0, diastolic=88.0, temperature=100.2, sleep=5.5
         )
         st.rerun()
     if st.button("✅ Scenario: Healthy baseline", width='stretch'):
-        st.session_state.vitals = dict(DEFAULT_VITALS)
+        apply_scenario(**DEFAULT_VITALS)
         st.rerun()
     st.divider()
     st.caption(
