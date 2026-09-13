@@ -17,6 +17,7 @@ from pathlib import Path
 
 import plotly.graph_objects as go
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 
 from report_translator import translate_report
 from triage import (
@@ -137,6 +138,19 @@ st.markdown(
         100% {box-shadow: 0 0 0 0 rgba(34,197,94,0);}
       }
       .stTabs [data-baseweb="tab"] {font-size: 1rem; font-weight: 600; gap: 6px;}
+      @keyframes alarm-pulse {
+        0%, 100% {background-color:#dc2626; box-shadow:0 0 0 0 rgba(220,38,38,.5);}
+        50% {background-color:#b91c1c; box-shadow:0 0 0 12px rgba(220,38,38,0);}
+      }
+      .alarm-banner {
+        border-radius:14px; padding:16px 22px; color:white;
+        display:flex; align-items:center; gap:18px;
+        animation: alarm-pulse 1.2s ease-in-out infinite;
+      }
+      .pill-timer {
+        background:rgba(255,255,255,.2); border-radius:999px;
+        padding:3px 12px; font-size:.85rem; font-weight:700;
+      }
     </style>
     """,
     unsafe_allow_html=True,
@@ -172,6 +186,8 @@ if "report" not in st.session_state:
     st.session_state.report = None
 if "recovery" not in st.session_state:
     st.session_state.recovery = None
+if "alarm_on" not in st.session_state:
+    st.session_state.alarm_on = False
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -200,6 +216,25 @@ def _med_state(med: dict, now: datetime) -> str:
         if now >= due_dt:
             return "due"  # a dose time has passed today and not marked taken
     return "upcoming"
+
+
+def _due_meds(meds: list[dict], now: datetime) -> list[tuple[dict, str]]:
+    """Meds whose time has arrived today and are still unmarked → [(med, HH:MM)]."""
+    due: list[tuple[dict, str]] = []
+    for med in meds:
+        if now.date() in med["taken"] or now.date() in med["missed"]:
+            continue
+        for hhmm in med["times"]:
+            if now >= datetime.combine(now.date(), _parse_hhmm(hhmm)):
+                due.append((med, hhmm))
+                break
+    return due
+
+
+def dismiss_alarm() -> None:
+    """Stop the alarm until a NEW dose becomes due (snooze-safe)."""
+    st.session_state.alarm_on = False
+    st.session_state.alarm_dismissed_for = tuple(sorted(m["id"] for m, _ in _due_meds(st.session_state.meds, datetime.now())))
 
 
 def _next_dose(meds: list[dict], now: datetime) -> tuple[str, str] | None:
@@ -297,6 +332,67 @@ EXAMPLE_CASES = {
 
 
 NOW = datetime.now()
+
+# ---------------------------------------------------------------------------
+# Medication ALARM — real sound, fires while the app is open
+# ---------------------------------------------------------------------------
+if "alarm_dismissed_for" not in st.session_state:
+    st.session_state.alarm_dismissed_for = ()
+
+# Hands-free: the page re-checks the clock every 30 s so the alarm fires
+# on its own while the app is open. Slight jitter avoids server stampedes.
+if st.session_state.get("authenticated"):
+    st_autorefresh(interval=30_000, key="alarm_clock_tick")
+
+_alarm_due = _due_meds(st.session_state.meds, NOW)
+_alarm_ids = tuple(sorted(m["id"] for m, _ in _alarm_due))
+_alarm_sounding = bool(_alarm_due) and _alarm_ids != st.session_state.alarm_dismissed_for
+if _alarm_sounding:
+    st.session_state.alarm_on = True
+
+
+def _render_alarm() -> None:
+    """Looping alarm song + pulsing red banner for every due dose."""
+    st.markdown(
+        f'''
+        <div class="alarm-banner">
+          <div style="font-size:2.6rem;">⏰</div>
+          <div style="flex:1;">
+            <div style="font-size:1.5rem; font-weight:900;">MEDICINE ALARM!</div>
+            <div style="font-size:1rem; opacity:.95;">
+              Time to take: <b>{" · ".join(m["icon"] + " " + m["name"] for m, _ in _alarm_due)}</b>
+              &nbsp;<span class="pill-timer">due {" · ".join(t for _, t in _alarm_due)}</span>
+            </div>
+          </div>
+        </div>
+        ''',
+        unsafe_allow_html=True,
+    )
+    st.audio("assets/alarm.wav", autoplay=True, loop=True)
+    d1, d2, _ = st.columns([1, 1, 2])
+    d1.button("🔕 Dismiss", on_click=dismiss_alarm, width='stretch')
+
+    def _take_all_due() -> None:
+        now = datetime.now()
+        for med, _t in _due_meds(st.session_state.meds, now):
+            med["taken"].add(now.date())
+            med["missed"].discard(now.date())
+        dismiss_alarm()
+
+    d2.button("✅ I took it", on_click=_take_all_due, width='stretch')
+    st.write("")
+
+
+if st.session_state.get("authenticated"):
+    if _alarm_sounding:
+        _render_alarm()
+    elif st.session_state.meds:
+        nxt = _next_dose(st.session_state.meds, NOW)
+        if nxt:
+            st.markdown(
+                f'<div class="chip" style="margin-bottom:4px;">⏰ Alarm armed — next: {nxt[0]} at {nxt[1]}</div>',
+                unsafe_allow_html=True,
+            )
 
 # ---------------------------------------------------------------------------
 # Authentication — local account store (hashed passwords, demo-grade)
@@ -685,11 +781,11 @@ with tab_meds:
                 unsafe_allow_html=True,
             )
             b1, b2, _ = st.columns([1, 1, 2])
-            if b1.button("✅ Taken", key=f"take_{med['id']}", width='stretch'):
+            if b1.button("✅ Taken", key=f"take_{med['id']}", width='stretch', on_click=dismiss_alarm):
                 med["taken"].add(now_m.date())
                 med["missed"].discard(now_m.date())
                 st.rerun()
-            if b2.button("❌ Skip", key=f"skip_{med['id']}", width='stretch'):
+            if b2.button("❌ Skip", key=f"skip_{med['id']}", width='stretch', on_click=dismiss_alarm):
                 med["missed"].add(now_m.date())
                 med["taken"].discard(now_m.date())
                 st.rerun()
@@ -927,6 +1023,14 @@ with tab_recovery:
             for h in rec["history"]:
                 icon = "🎉" if h["verdict"] == "Cured" else "📈" if h["verdict"].startswith("Improving") else "⚠️"
                 st.markdown(f"- {icon} **Month {h['months']}** ({h['on'].strftime('%d %b %Y')}): {h['verdict']}")
+
+            st.divider()
+            st.caption("🔔 Alarm test")
+            if st.button("▶️ Play alarm song (test)", width='stretch'):
+                st.session_state.alarm_test = True
+            if st.session_state.pop("alarm_test", False):
+                st.audio("assets/alarm.wav", autoplay=True)
+                st.toast("🔔 This is the medicine alarm sound!")
 
         # -- Demo time-travel -------------------------------------------------
         with st.expander("⏩ Demo time-travel (for judges)"):
