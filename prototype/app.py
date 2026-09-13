@@ -204,6 +204,40 @@ def _parse_hhmm(hhmm: str) -> time:
     return time(int(h), int(m))
 
 
+def _parse_manual_time(raw: str) -> str | None:
+    """Free-text time → 'HH:MM' (24h), or None if unparseable.
+
+    Accepts: 16:07 · 4:07 pm · 4pm · 0930 · 9.45 · 7-15 …
+    """
+    import re
+
+    text = raw.strip().lower().replace(".", ":").replace("-", ":").replace(" ", "")
+    ampm = None
+    if text.endswith(("am", "pm")):
+        ampm = text[-2:]
+        text = text[:-2].strip()
+    match = re.fullmatch(r"(\d{1,2})(?::(\d{1,2}))?", text)
+    if not match:
+        # bare 3-4 digits like 0930 / 930 → HHMM
+        if text.isdigit() and 3 <= len(text) <= 4:
+            hour = int(text[:-2])
+            minute = int(text[-2:])
+            if ampm == "pm" and hour < 12:
+                hour += 12
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                return f"{hour:02d}:{minute:02d}"
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2) or 0)
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    if ampm == "am" and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return f"{hour:02d}:{minute:02d}"
+
+
 def _med_state(med: dict, now: datetime) -> str:
     """Return 'taken' | 'due' | 'upcoming' | 'missed' for display."""
     today = now.date()
@@ -756,19 +790,39 @@ with tab_meds:
 
     with add_col:
         st.markdown("##### ➕ Add medicine")
-        m_name = st.text_input("Medicine name", placeholder="e.g. Paracetamol 650mg")
+        m_name = st.text_input("Medicine name", placeholder="e.g. Paracetamol 650mg", key="med_name_input")
         m_times = st.multiselect(
             "Times per day (5-minute steps — type to search, e.g. 16:05)",
             options=[f"{h:02d}:{m:02d}" for h in range(24) for m in range(0, 60, 5)],
-            default=["08:00"],
+            default=[],
+        )
+        m_manual = st.text_input(
+            "➕ Or type a time manually (e.g. 16:07, 4:07pm, 930)",
+            placeholder="16:07",
+            key="med_manual_time",
         )
         m_icon = st.selectbox("Icon", ["💊", "🫀", "☀️", "💉", "🧪", "🩹"])
-        if st.button("➕ Add", type="primary", width='stretch') and m_name.strip() and m_times:
-            new_id = max((m["id"] for m in st.session_state.meds), default=0) + 1
-            st.session_state.meds.append(
-                {"id": new_id, "name": m_name.strip(), "times": sorted(m_times), "icon": m_icon, "taken": set(), "missed": set()}
-            )
-            st.rerun()
+        if st.button("➕ Add", type="primary", width='stretch') and m_name.strip() and (m_times or m_manual.strip()):
+            chosen = set(m_times)
+            parse_failed = False
+            for piece in m_manual.replace(";", ",").split(","):
+                if not piece.strip():
+                    continue
+                parsed = _parse_manual_time(piece)
+                if parsed is None:
+                    st.error(f"❌ Could not understand time “{piece.strip()}” — try 16:07 or 4:07pm")
+                    parse_failed = True
+                else:
+                    chosen.add(parsed)
+            if not parse_failed and chosen:
+                new_id = max((m["id"] for m in st.session_state.meds), default=0) + 1
+                st.session_state.meds.append(
+                    {"id": new_id, "name": m_name.strip(), "times": sorted(chosen), "icon": m_icon, "taken": set(), "missed": set()}
+                )
+                # Clear the form so the next Add starts fresh.
+                st.session_state.pop("med_name_input", None)
+                st.session_state.pop("med_manual_time", None)
+                st.rerun()
 
     with list_col:
         st.markdown("##### 💊 Today's schedule")
