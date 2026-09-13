@@ -1,0 +1,3 @@
+# Root shim so Render builds succeed no matter which directory the
+# build command runs from. The real dependencies live in prototype/.
+-r prototype/requirements.txt
