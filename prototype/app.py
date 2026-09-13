@@ -35,11 +35,11 @@ st.set_page_config(
 )
 
 STATUS_COLOR = {
-    Level.HEALTHY: ("#16a34a", "🟢"),
-    Level.CAUTION: ("#f59e0b", "🟡"),
-    Level.URGENT: ("#dc2626", "🔴"),
+    Level.HEALTHY: ("#15803d", "🟢"),
+    Level.CAUTION: ("#b45309", "🟡"),
+    Level.URGENT: ("#b91c1c", "🔴"),
 }
-LEVEL_COLOR = {"Low": "#16a34a", "Moderate": "#f59e0b", "Critical": "#dc2626"}
+LEVEL_COLOR = {"Low": "#15803d", "Moderate": "#d97706", "Critical": "#dc2626"}
 LEVEL_EMOJI = {"Low": "🟢", "Moderate": "🟡", "Critical": "🚨"}
 
 # Two-word status for the vital cards — no sentences, just the verdict.
@@ -49,11 +49,16 @@ SHORT_STATUS = {
     Level.URGENT: "🚨 Alert",
 }
 
-# Giant banner content per overall verdict.
+# Giant banner content + professional tinted palette per verdict.
 BANNER = {
-    "Low": ("🟢", "ALL GOOD", "Everything is in the safe zone. Keep it up! 💪"),
-    "Moderate": ("🟡", "PAY ATTENTION", "Some readings are off — see a doctor soon. 📅"),
-    "Critical": ("🚨", "EMERGENCY", "Get help NOW — call your local emergency number."),
+    "Low": ("🟢", "ALL GOOD", "Everything is in the safe zone."),
+    "Moderate": ("🟡", "PAY ATTENTION", "Some readings are off — see a doctor soon."),
+    "Critical": ("🚨", "EMERGENCY", "Get help now — call your local emergency number."),
+}
+BANNER_STYLE = {
+    "Low": {"bg": "#f0fdf4", "border": "#bbf7d0", "accent": "#15803d", "text": "#14532d"},
+    "Moderate": {"bg": "#fffbeb", "border": "#fde68a", "accent": "#d97706", "text": "#78350f"},
+    "Critical": {"bg": "#dc2626", "border": "#b91c1c", "accent": "#ffffff", "text": "#ffffff"},
 }
 
 st.markdown(
@@ -61,59 +66,54 @@ st.markdown(
     <style>
       .block-container {padding-top: 1.1rem;}
       .verdict {
-        border-radius: 20px; padding: 18px 26px; color: white;
-        display: flex; align-items: center; gap: 22px;
-        box-shadow: 0 8px 24px rgba(15,23,42,.18);
+        border-radius: 14px; padding: 16px 22px;
+        display: flex; align-items: center; gap: 18px;
       }
-      .verdict-word {font-size: 2.7rem; font-weight: 900; letter-spacing: 1px; line-height: 1.1;}
-      .verdict-action {font-size: 1.05rem; opacity: .95;}
+      .verdict-word {font-size: 1.9rem; font-weight: 800; letter-spacing: .5px; line-height: 1.15;}
+      .verdict-action {font-size: .98rem; opacity: .85;}
       .score-ring {
-        background: rgba(255,255,255,.18); border-radius: 50%;
-        width: 108px; height: 108px; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; flex-shrink: 0;
-        font-weight: 800; line-height: 1;
+        border-radius: 50%; width: 92px; height: 92px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        flex-shrink: 0; font-weight: 800; line-height: 1;
       }
       .chip {
-        background: white; color:#0f172a; border: 1px solid rgba(148,163,184,.35);
-        border-radius: 999px; padding: 8px 16px; text-align: center;
-        font-weight: 700; font-size: .95rem;
-        box-shadow: 0 1px 3px rgba(15,23,42,.06);
+        background: #fff; border: 1px solid #e2e8f0;
+        border-radius: 999px; padding: 7px 14px; text-align: center;
+        font-weight: 600; font-size: .9rem; color: #334155;
       }
       .vital-card {
-        background: white; color: #0f172a; border-radius: 16px; padding: 14px 16px;
-        border: 1px solid rgba(148,163,184,.28); border-top: 5px solid #16a34a;
-        box-shadow: 0 2px 6px rgba(15,23,42,.06);
+        background: #fff; color: #0f172a; border-radius: 14px; padding: 14px 16px;
+        border: 1px solid #e2e8f0; border-top: 4px solid #15803d;
       }
-      .vital-value {font-size: 2.3rem; font-weight: 900; line-height: 1.1;}
-      .vital-label {font-size: .85rem; font-weight: 700; opacity: .8;}
-      .vital-status {font-size: .9rem; font-weight: 800; margin-top: 2px;}
-      .tag {border-radius: 999px; padding: 3px 12px; font-size: .8rem; font-weight: 800; color: white; display: inline-block;}
+      .vital-value {font-size: 2.1rem; font-weight: 800; line-height: 1.1;}
+      .vital-label {font-size: .82rem; font-weight: 600; color: #64748b;}
+      .vital-status {font-size: .88rem; font-weight: 700; margin-top: 2px;}
+      .tag {border-radius: 999px; padding: 3px 12px; font-size: .78rem; font-weight: 700; color: #fff; display: inline-block;}
       .med-card {
-        background: white; color: #0f172a; border-radius: 16px; padding: 14px 16px;
-        border: 1px solid rgba(148,163,184,.28); border-left: 6px solid #3b82f6;
-        box-shadow: 0 2px 6px rgba(15,23,42,.06);
+        background: #fff; color: #0f172a; border-radius: 14px; padding: 14px 16px;
+        border: 1px solid #e2e8f0; border-left: 5px solid #2563eb;
       }
-      .med-name {font-size: 1.25rem; font-weight: 900;}
-      .med-meta {font-size: .95rem; font-weight: 700; opacity: .75; margin-top: 2px;}
+      .med-name {font-size: 1.15rem; font-weight: 700;}
+      .med-meta {font-size: .92rem; font-weight: 600; color: #64748b; margin-top: 2px;}
       .lab-row {
-        background: white; color: #0f172a; border: 1px solid rgba(148,163,184,.28); border-radius: 14px;
-        padding: 12px 16px; margin: 8px 0; box-shadow: 0 1px 3px rgba(15,23,42,.06);
+        background: #fff; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 14px;
+        padding: 12px 16px; margin: 8px 0;
       }
-      .lab-name {font-size: 1.2rem; font-weight: 900;}
-      .lab-why {font-size: .9rem; margin-top: 4px; color: #334155;}
-      .chat-user {background: #dbeafe; color:#0f172a; border-radius: 14px 14px 4px 14px; padding: 10px 14px; margin: 6px 40px 6px 0;}
-      .chat-bot  {background: white; color: #0f172a; border: 1px solid rgba(148,163,184,.3); border-radius: 14px 14px 14px 4px; padding: 12px 14px; margin: 6px 0 6px 40px; box-shadow: 0 1px 3px rgba(15,23,42,.06);}
+      .lab-name {font-size: 1.15rem; font-weight: 700;}
+      .lab-why {font-size: .9rem; margin-top: 4px; color: #475569;}
+      .chat-user {background: #eff6ff; color: #0f172a; border-radius: 14px 14px 4px 14px; padding: 10px 14px; margin: 6px 40px 6px 0;}
+      .chat-bot  {background: #fff; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 14px 14px 14px 4px; padding: 12px 14px; margin: 6px 0 6px 40px;}
       .doc-online {
-        width: 12px; height: 12px; border-radius: 50%; background: #22c55e;
+        width: 10px; height: 10px; border-radius: 50%; background: #22c55e;
         display: inline-block; margin-right: 8px;
         box-shadow: 0 0 0 rgba(34,197,94,.6); animation: pulse 1.6s infinite;
       }
       @keyframes pulse {
         0% {box-shadow: 0 0 0 0 rgba(34,197,94,.55);}
-        70% {box-shadow: 0 0 0 10px rgba(34,197,94,0);}
+        70% {box-shadow: 0 0 0 9px rgba(34,197,94,0);}
         100% {box-shadow: 0 0 0 0 rgba(34,197,94,0);}
       }
-      .stTabs [data-baseweb="tab"] {font-size: 1.05rem; font-weight: 700; gap: 6px;}
+      .stTabs [data-baseweb="tab"] {font-size: 1rem; font-weight: 600; gap: 6px;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -232,16 +232,19 @@ with st.sidebar:
 result = composite_triage(st.session_state.vitals)
 emoji, word, action = BANNER[result.level]
 verdict_color = LEVEL_COLOR[result.level]
+bstyle = BANNER_STYLE[result.level]
 
 st.markdown(
     f"""
-    <div class="verdict" style="background: linear-gradient(120deg, {verdict_color}, {verdict_color}cc);">
-      <div style="font-size:3.6rem; line-height:1;">{emoji}</div>
+    <div class="verdict" style="background:{bstyle['bg']}; border:1px solid {bstyle['border']}; border-left:6px solid {bstyle['accent']};">
+      <div style="font-size:2.4rem; line-height:1;">{emoji}</div>
       <div style="flex:1;">
-        <div class="verdict-word">{word}</div>
-        <div class="verdict-action">{action}</div>
+        <div class="verdict-word" style="color:{bstyle['text']};">{word}</div>
+        <div class="verdict-action" style="color:{bstyle['text']};">{action}</div>
       </div>
-      <div class="score-ring"><span style="font-size:2.1rem;">{result.score}</span><span style="font-size:.85rem; opacity:.85;">/ 100</span></div>
+      <div class="score-ring" style="background:{bstyle['accent']}; color:{'#ffffff' if result.level != 'Critical' else '#dc2626'};">
+        <span style="font-size:1.8rem;">{result.score}</span><span style="font-size:.8rem; opacity:.85;">/100</span>
+      </div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -275,7 +278,7 @@ with tab_vitals:
 
     with left:
         # Controls FIRST so a slider move instantly re-renders the cards below.
-        st.markdown("##### 🎛️ Drag the sliders — watch the verdict change")
+        st.markdown("##### 🎛️ Vitals simulation")
         slider_cols = st.columns(3)
         # All-float bounds/steps keep Streamlit's slider type rules happy.
         spans = {
@@ -346,9 +349,9 @@ with tab_vitals:
         first, *rest = result.recommendations
         st.markdown(
             f"""
-            <div class="verdict" style="background:{verdict_color}; padding:14px 18px; gap:12px;">
-              <div style="font-size:1.7rem;">➜</div>
-              <div style="font-size:1.15rem; font-weight:800;">{first}</div>
+            <div class="verdict" style="background:#eff6ff; border:1px solid #bfdbfe; border-left:6px solid #2563eb; padding:12px 16px; gap:10px;">
+              <div style="font-size:1.3rem;">➜</div>
+              <div style="font-size:1.05rem; font-weight:700; color:#1e3a8a;">{first}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -372,7 +375,7 @@ with tab_vitals:
         wobble = [0, 1.5, -1, 2, -2.5, 1, 0.5, -1.5, 2.5, -2, 0, 1,
                   -1, 2, 0.5, -2.5, 1.5, 0, -1, 1, 2, -1.5, 0.5, -0.5]
         for key, name, color in [
-            ("heart_rate", "Heart Rate", "#ef4444"),
+            ("heart_rate", "Heart Rate", "#dc2626"),
             ("spo2", "SpO₂", "#3b82f6"),
         ]:
             base = st.session_state.vitals[key]
@@ -390,11 +393,11 @@ with tab_meds:
     if nxt:
         st.markdown(
             f"""
-            <div class="verdict" style="background: linear-gradient(120deg, #3b82f6, #6366f1); padding:16px 24px;">
-              <div style="font-size:2.8rem; line-height:1;">⏰</div>
+            <div class="verdict" style="background:#fff; border:1px solid #e2e8f0; border-left:6px solid #2563eb;">
+              <div style="font-size:2.2rem; line-height:1;">⏰</div>
               <div style="flex:1;">
-                <div class="verdict-word" style="font-size:2rem;">NEXT DOSE</div>
-                <div class="verdict-action">{nxt[0]} at {nxt[1]}</div>
+                <div class="verdict-word" style="color:#1e3a8a;">NEXT DOSE</div>
+                <div class="verdict-action" style="color:#334155;">{nxt[0]} at {nxt[1]}</div>
               </div>
             </div>
             """,
@@ -428,15 +431,15 @@ with tab_meds:
         for med in st.session_state.meds:
             state = _med_state(med, now_m)
             badge = {
-                "taken": '<span class="tag" style="background:#16a34a;">✅ TAKEN</span>',
-                "due": '<span class="tag" style="background:#f59e0b;">⏰ DUE NOW</span>',
+                "taken": '<span class="tag" style="background:#15803d;">✅ TAKEN</span>',
+                "due": '<span class="tag" style="background:#d97706;">⏰ DUE NOW</span>',
                 "missed": '<span class="tag" style="background:#dc2626;">❌ MISSED</span>',
-                "upcoming": '<span class="tag" style="background:#3b82f6;">🕒 SCHEDULED</span>',
+                "upcoming": '<span class="tag" style="background:#2563eb;">🕒 SCHEDULED</span>',
             }[state]
             times_text = " · ".join(med["times"])
             st.markdown(
                 f"""
-                <div class="med-card" style="border-left-color:{"#16a34a" if state == "taken" else "#f59e0b" if state == "due" else "#dc2626" if state == "missed" else "#3b82f6"};">
+                <div class="med-card" style="border-left-color:{"#15803d" if state == "taken" else "#d97706" if state == "due" else "#dc2626" if state == "missed" else "#2563eb"};">
                   <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div class="med-name">{med["icon"]} {med["name"]}</div>
                     {badge}
@@ -470,7 +473,7 @@ with tab_meds:
                     number={"suffix": "%", "font": {"size": 34}},
                     gauge={
                         "axis": {"range": [0, 100], "showticklabels": False},
-                        "bar": {"color": "#16a34a" if pct >= 80 else "#f59e0b" if pct >= 50 else "#dc2626", "thickness": 0.3},
+                        "bar": {"color": "#15803d" if pct >= 80 else "#d97706" if pct >= 50 else "#dc2626", "thickness": 0.3},
                         "steps": [
                             {"range": [0, 50], "color": "rgba(220,38,38,.25)"},
                             {"range": [50, 80], "color": "rgba(245,158,11,.25)"},
@@ -483,22 +486,19 @@ with tab_meds:
             st.plotly_chart(adh, width='stretch')
         with a2:
             st.markdown(
-                f'<div class="chip" style="font-size:1.05rem;">✅ {done_doses} of {total_doses} doses taken today</div>',
+                f'<div class="chip" style="font-size:1rem;">✅ {done_doses} of {total_doses} doses taken today</div>',
                 unsafe_allow_html=True,
             )
-            if pct < 100 and total_doses:
-                st.markdown("- Doses tick **✅ Taken** as you swallow them.")
-                st.markdown("- The ring turns **green at 80%** — your daily goal.")
 
 # === TAB 3 — AI DOCTOR 24/7 =================================================
 with tab_doc:
     st.markdown(
         """
-        <div class="verdict" style="background: linear-gradient(120deg, #0ea5e9, #6366f1); padding:14px 22px;">
-          <div style="font-size:2.6rem; line-height:1;">👨‍⚕️</div>
+        <div class="verdict" style="background:#fff; border:1px solid #e2e8f0; border-left:6px solid #0d9488;">
+          <div style="font-size:2.2rem; line-height:1;">🩺</div>
           <div style="flex:1;">
-            <div class="verdict-word" style="font-size:1.9rem;">AI DOCTOR <span class="doc-online"></span>ONLINE</div>
-            <div class="verdict-action">Always here — 24 hours · 7 days · no appointment needed</div>
+            <div class="verdict-word" style="font-size:1.6rem; color:#134e4a;">AI DOCTOR <span class="doc-online"></span> ONLINE</div>
+            <div class="verdict-action" style="color:#334155;">Available 24 hours · 7 days · no appointment needed</div>
           </div>
         </div>
         """,
@@ -579,11 +579,11 @@ with tab_report:
         rep = st.session_state.report
         n_ab, n_all = len(rep["abnormal"]), len(rep["results"])
         if n_ab == 0 and n_all:
-            banner = '<div class="verdict" style="background:#16a34a; padding:14px 20px; gap:14px;"><div style="font-size:2.4rem;">🎉</div><div class="verdict-word" style="font-size:1.8rem;">ALL CLEAR</div><div class="verdict-action">Every marker is inside the normal range.</div></div>'
+            banner = '<div class="verdict" style="background:#f0fdf4; border:1px solid #bbf7d0; border-left:6px solid #15803d;"><div style="font-size:2rem;">✅</div><div class="verdict-word" style="color:#14532d;">ALL CLEAR</div><div class="verdict-action" style="color:#166534;">Every marker is inside the normal range.</div></div>'
         elif n_all:
-            banner = f'<div class="verdict" style="background:#f59e0b; padding:14px 20px; gap:14px;"><div style="font-size:2.4rem;">📋</div><div class="verdict-word" style="font-size:1.8rem;">{n_ab} of {n_all} NEED A LOOK</div><div class="verdict-action">Each line below shows what it means.</div></div>'
+            banner = f'<div class="verdict" style="background:#fffbeb; border:1px solid #fde68a; border-left:6px solid #d97706;"><div style="font-size:2rem;">📋</div><div class="verdict-word" style="color:#78350f;">{n_ab} of {n_all} NEED A LOOK</div><div class="verdict-action" style="color:#92400e;">Each line below shows what it means.</div></div>'
         else:
-            banner = '<div class="verdict" style="background:#64748b; padding:14px 20px;"><div class="verdict-action">🤔 No known lab markers found — try the sample text on the right.</div></div>'
+            banner = '<div class="verdict" style="background:#fff; border:1px solid #e2e8f0; border-left:6px solid #64748b;"><div class="verdict-action" style="color:#334155;">No known lab markers found — try the sample text.</div></div>'
         st.markdown(banner, unsafe_allow_html=True)
 
         for r in rep["results"]:
