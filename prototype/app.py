@@ -10,7 +10,7 @@ Stack: Streamlit + Plotly (all logic offline & deterministic).
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -147,6 +147,8 @@ if "chat" not in st.session_state:
     ]
 if "report" not in st.session_state:
     st.session_state.report = None
+if "recovery" not in st.session_state:
+    st.session_state.recovery = None
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -197,6 +199,32 @@ def _next_dose(meds: list[dict], now: datetime) -> tuple[str, str] | None:
     return name, f"{hhmm} ({when})"
 
 
+def _add_months(d: date, months: int) -> date:
+    """Date + N months, clamped to end-of-month when the day overflows."""
+    month_index = d.month - 1 + months
+    year = d.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(d.day, [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                      31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+    return date(year, month, day)
+
+
+def _build_plan(start: date) -> list[dict]:
+    """Follow-up schedule: status check at 1 month, cure check at 6 months.
+
+    If the 6-month cure check fails, a +3-month re-check is appended
+    dynamically (and repeats until cured).
+    """
+    return [
+        {"months": 1, "due": _add_months(start, 1), "done": False, "outcome": None},
+        {"months": 6, "due": _add_months(start, 6), "done": False, "outcome": None},
+    ]
+
+
+def _due_reviews(plan: list[dict], today: date) -> list[dict]:
+    return [r for r in plan if not r["done"] and r["due"] <= today]
+
+
 NOW = datetime.now()
 
 # ---------------------------------------------------------------------------
@@ -224,6 +252,17 @@ with st.sidebar:
     nxt = _next_dose(st.session_state.meds, NOW)
     if nxt:
         st.markdown(f"⏰ **Next dose:** {nxt[0]} · {nxt[1]}")
+    rec = st.session_state.recovery
+    if rec and rec["status"] == "cured":
+        st.markdown("🎉 **Recovery:** Cured & discharged")
+    elif rec:
+        due = _due_reviews(rec["plan"], NOW.date())
+        if due:
+            st.markdown(f"🔔 **Recovery:** Month-{due[0]['months']} check-up DUE")
+        else:
+            nxt_r = next((r for r in rec["plan"] if not r["done"]), None)
+            if nxt_r:
+                st.markdown(f"🩹 **Recovery:** Month-{nxt_r['months']} on {nxt_r['due'].strftime('%d %b')}")
     st.caption("⚠️ Educational demo — not a medical device.")
 
 # ---------------------------------------------------------------------------
@@ -268,8 +307,8 @@ st.write("")
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_vitals, tab_meds, tab_doc, tab_report = st.tabs(
-    ["📡 Vitals", "💊 Medications", "👨‍⚕️ AI Doctor · 24/7", "📄 Report Translator"]
+tab_vitals, tab_meds, tab_doc, tab_recovery, tab_report = st.tabs(
+    ["📡 Vitals", "💊 Medications", "👨‍⚕️ AI Doctor · 24/7", "🩺 Recovery Tracker", "📄 Report Translator"]
 )
 
 # === TAB 1 — VITALS =========================================================
@@ -560,7 +599,152 @@ with tab_doc:
         st.markdown("- Red-flag symptoms flip the chat to **CRITICAL RISK** instantly.")
         st.markdown("- Verdicts come from the same explainable triage engine as the Vitals tab.")
 
-# === TAB 4 — REPORT TRANSLATOR ==============================================
+# === TAB 4 — RECOVERY TRACKER ===============================================
+with tab_recovery:
+    rec = st.session_state.recovery
+    clock = st.session_state.get("clock", date.today())
+
+    # -- No active case → enrollment form ------------------------------------
+    if rec is None:
+        st.markdown(
+            '<div class="verdict" style="background:#f5f3ff; border:1px solid #ddd6fe; border-left:6px solid #7c3aed;">'
+            '<div style="font-size:2.2rem; line-height:1;">🩺</div>'
+            '<div style="flex:1;"><div class="verdict-word" style="color:#4c1d95;">RECOVERY TRACKER</div>'
+            '<div class="verdict-action" style="color:#334155;">Start a treatment → automatic check-ups at 1 & 6 months → cured? discharged. Not cured? re-checked every 3 months.</div></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.write("")
+        with st.form("enroll_form", border=False):
+            e1, e2 = st.columns(2)
+            disease = e1.text_input("🦠 Disease / condition", placeholder="e.g. Type 2 Diabetes")
+            medicine = e2.text_input("💊 Medicine prescribed", placeholder="e.g. Metformin 500mg")
+            start = st.date_input("📅 Treatment start date", value=date.today())
+            if st.form_submit_button("🚀 Start recovery plan", type="primary") and disease.strip() and medicine.strip():
+                st.session_state.recovery = {
+                    "disease": disease.strip(),
+                    "medicine": medicine.strip(),
+                    "start": start,
+                    "plan": _build_plan(start),
+                    "status": "in_treatment",
+                    "history": [],
+                }
+                st.session_state.clock = date.today()
+                st.rerun()
+        st.info("👆 The plan schedules a **month-1 status check** and a **month-6 cure check** automatically.")
+
+    else:
+        due_reviews = _due_reviews(rec["plan"], clock)
+
+        # -- Notification banner -------------------------------------------
+        if rec["status"] == "cured":
+            months = rec["history"][-1]["months"] if rec["history"] else 6
+            st.markdown(
+                f'<div class="verdict" style="background:#f0fdf4; border:1px solid #bbf7d0; border-left:6px solid #15803d;">'
+                f'<div style="font-size:2.2rem;">🎉</div>'
+                f'<div style="flex:1;"><div class="verdict-word" style="color:#14532d;">CURED & DISCHARGED</div>'
+                f'<div class="verdict-action" style="color:#166534;">{rec["disease"]} — treatment complete after {months} months. No further check-ups needed.</div></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        elif due_reviews:
+            r = due_reviews[0]
+            st.markdown(
+                f'<div class="verdict" style="background:#fffbeb; border:1px solid #fde68a; border-left:6px solid #d97706;">'
+                f'<div style="font-size:2.2rem;">🔔</div>'
+                f'<div style="flex:1;"><div class="verdict-word" style="color:#78350f;">CHECK-UP DUE — MONTH {r["months"]}</div>'
+                f'<div class="verdict-action" style="color:#92400e;">How is your {rec["disease"]} treatment going? Record your status below.</div></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            nxt_r = next((r for r in rec["plan"] if not r["done"]), None)
+            if nxt_r:
+                days = (nxt_r["due"] - clock).days
+                st.markdown(
+                    f'<div class="verdict" style="background:#eff6ff; border:1px solid #bfdbfe; border-left:6px solid #2563eb;">'
+                    f'<div style="font-size:2.2rem;">🗓️</div>'
+                    f'<div style="flex:1;"><div class="verdict-word" style="color:#1e3a8a;">ON TRACK</div>'
+                    f'<div class="verdict-action" style="color:#334155;">{rec["disease"]} · next check-up: month {nxt_r["months"]} on {nxt_r["due"].strftime("%d %b %Y")} (in {days} days)</div></div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        st.write("")
+
+        # -- Timeline cards -------------------------------------------------
+        st.markdown("##### 🗺️ Recovery timeline")
+        plan_sorted = sorted(rec["plan"], key=lambda r: r["due"])
+        tcols = st.columns(min(len(plan_sorted), 4))
+        for i, r in enumerate(plan_sorted):
+            with tcols[i % len(tcols)]:
+                if r["done"]:
+                    state_icon, tint, edge, verdict_text = "✅", "#f0fdf4", "#15803d", f"{r['outcome']}"
+                elif r["due"] <= clock:
+                    state_icon, tint, edge, verdict_text = "🔔", "#fffbeb", "#d97706", "DUE NOW"
+                else:
+                    state_icon, tint, edge, verdict_text = "🕒", "#eff6ff", "#2563eb", r["due"].strftime("%d %b")
+                st.markdown(
+                    f'<div class="med-card" style="border-left-color:{edge}; background:{tint}; padding:10px 12px;">'
+                    f'<div class="med-name" style="font-size:1rem;">{state_icon} Month {r["months"]}</div>'
+                    f'<div class="med-meta">{verdict_text}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        st.write("")
+
+        # -- Cure check form (only when a review is due) ---------------------
+        if rec["status"] != "cured" and due_reviews:
+            r = due_reviews[0]
+            with st.form(f"cure_form_{r['months']}", border=False):
+                st.markdown(f"##### 📋 Month-{r['months']} review — {r['due'].strftime('%d %b %Y')}")
+                c1, c2 = st.columns(2)
+                symptoms = c1.radio("Did the symptoms go away?", ["Yes, fully", "Partially", "No, same or worse"])
+                labs = c2.radio("Latest lab reports normal?", ["Yes, all normal", "Some abnormal", "Not tested yet"])
+                doctor = st.radio("Doctor's assessment", ["Cured", "Improving — continue medicine", "Not cured"])
+                if st.form_submit_button("Submit review", type="primary"):
+                    r["done"] = True
+                    r["outcome"] = doctor
+                    rec["history"].append({"months": r["months"], "on": clock, "verdict": doctor})
+                    if doctor == "Cured":
+                        rec["status"] = "cured"
+                    elif r["months"] >= 6 or doctor == "Not cured":
+                        recheck_due = _add_months(r["due"], 3)
+                        rec["plan"].append({
+                            "months": r["months"] + 3,
+                            "due": recheck_due,
+                            "done": False,
+                            "outcome": None,
+                        })
+                    st.rerun()
+        elif rec["status"] != "cured":
+            st.info("🗓️ Nothing to fill right now — the next check-up will notify you automatically.")
+
+        # -- History log ------------------------------------------------------
+        if rec["history"]:
+            st.markdown("##### 📜 Review history")
+            for h in rec["history"]:
+                icon = "🎉" if h["verdict"] == "Cured" else "📈" if h["verdict"].startswith("Improving") else "⚠️"
+                st.markdown(f"- {icon} **Month {h['months']}** ({h['on'].strftime('%d %b %Y')}): {h['verdict']}")
+
+        # -- Demo time-travel -------------------------------------------------
+        with st.expander("⏩ Demo time-travel (for judges)"):
+            st.caption("Simulate months passing — watch the notifications fire.")
+            t1, t2, t3 = st.columns(3)
+            if t1.button("+1 month", width='stretch'):
+                st.session_state.clock = clock + timedelta(days=31)
+                st.rerun()
+            if t2.button("+6 months", width='stretch'):
+                st.session_state.clock = clock + timedelta(days=183)
+                st.rerun()
+            if t3.button("Reset to today", width='stretch'):
+                st.session_state.clock = date.today()
+                st.rerun()
+            if st.button("🗑️ Discharge & start a new case", width='stretch'):
+                st.session_state.recovery = None
+                st.session_state.clock = date.today()
+                st.rerun()
+
+# === TAB 5 — REPORT TRANSLATOR ==============================================
 with tab_report:
     st.markdown("##### 🧾 Lab report ➜ 💬 plain English")
 
