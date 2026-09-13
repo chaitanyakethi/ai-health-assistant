@@ -11,6 +11,7 @@ Stack: Streamlit + Plotly (all logic offline & deterministic).
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -781,6 +782,10 @@ with tab_report:
         )
         if st.button("✨ Decode pasted text", width='stretch') and sample.strip():
             st.session_state.report = translate_report(sample)
+
+    if st.button("🧪 Load sample lab report (one-click demo)", width='stretch'):
+        sample_path = Path(__file__).parent / "samples" / "sample_report.txt"
+        st.session_state.report = translate_report(sample_path.read_text(encoding="utf-8"))
 
     if st.session_state.report:
         rep = st.session_state.report

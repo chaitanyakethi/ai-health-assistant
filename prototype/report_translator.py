@@ -11,6 +11,7 @@ intervals → explain each line in plain English → visual summary.
 
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
 
 from pypdf import PdfReader
@@ -102,24 +103,27 @@ class LabLine:
 
 
 def _extract_text(uploaded) -> str:
-    """Read an uploaded Streamlit file or a raw string into text."""
+    """Read an uploaded Streamlit file, raw bytes, or a plain string into text."""
     if isinstance(uploaded, str):
         return uploaded
-    raw = uploaded.getvalue()
+    raw = uploaded.getvalue() if hasattr(uploaded, "getvalue") else bytes(uploaded)
     if (getattr(uploaded, "name", "") or "").lower().endswith(".pdf") or raw[:4] == b"%PDF":
         try:
-            return "\n".join(page.extract_text() or "" for page in PdfReader(raw).pages)
+            reader = PdfReader(io.BytesIO(raw))
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
         except Exception as exc:  # noqa: BLE001 — surface a friendly demo error
             return f"[Could not read PDF: {exc}]"
     return raw.decode("utf-8", errors="replace")
 
 
-def _find_analyte(line: str) -> str | None:
+def _find_analyte(line: str) -> tuple[str | None, int]:
+    """Return (analyte name, index just after the matched alias) on the line."""
     low = line.lower()
     for alias, name in _ALIAS_ORDER:
-        if alias in low:
-            return name
-    return None
+        pos = low.find(alias)
+        if pos != -1:
+            return name, pos + len(alias)
+    return None, 0
 
 
 def _find_value(line: str) -> float | None:
@@ -148,10 +152,12 @@ def translate_report(source) -> dict:
     seen: set[str] = set()
 
     for line in lines:
-        name = _find_analyte(line)
+        name, after = _find_analyte(line)
         if not name or name in seen:
             continue
-        value = _find_value(line)
+        # Scan for the value AFTER the analyte name so digits inside names
+        # (HbA1c, B12) are never mistaken for the result.
+        value = _find_value(line[after:])
         if value is None:
             continue
         seen.add(name)
