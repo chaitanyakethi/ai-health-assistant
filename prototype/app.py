@@ -49,11 +49,31 @@ SHORT_STATUS = {
     Level.URGENT: "🚨 Alert",
 }
 
+# Professional SVG status icons for the verdict banner — crisper than emoji.
+ICON_CHECK = (
+    '<svg width="46" height="46" viewBox="0 0 24 24" fill="none">'
+    '<circle cx="12" cy="12" r="10" fill="#16a34a"/>'
+    '<path d="M7.8 12.4l2.6 2.6 5.8-6" stroke="white" stroke-width="2.3" '
+    'stroke-linecap="round" stroke-linejoin="round"/></svg>'
+)
+ICON_WARN = (
+    '<svg width="46" height="46" viewBox="0 0 24 24" fill="none">'
+    '<path d="M12 3.2L22 20.2H2L12 3.2Z" fill="#d97706"/>'
+    '<path d="M12 9.8v4.4" stroke="white" stroke-width="2.3" stroke-linecap="round"/>'
+    '<circle cx="12" cy="17" r="1.3" fill="white"/></svg>'
+)
+ICON_ALERT = (
+    '<svg width="46" height="46" viewBox="0 0 24 24" fill="none">'
+    '<circle cx="12" cy="12" r="10" fill="white"/>'
+    '<path d="M12 6.6v6.6" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"/>'
+    '<circle cx="12" cy="16.9" r="1.5" fill="#dc2626"/></svg>'
+)
+
 # Giant banner content + professional tinted palette per verdict.
 BANNER = {
-    "Low": ("🟢", "ALL GOOD", "Everything is in the safe zone."),
-    "Moderate": ("🟡", "PAY ATTENTION", "Some readings are off — see a doctor soon."),
-    "Critical": ("🚨", "EMERGENCY", "Get help now — call your local emergency number."),
+    "Low": (ICON_CHECK, "ALL GOOD", "Everything is in the safe zone."),
+    "Moderate": (ICON_WARN, "PAY ATTENTION", "Some readings are off — see a doctor soon."),
+    "Critical": (ICON_ALERT, "EMERGENCY", "Get help now — call your local emergency number."),
 }
 BANNER_STYLE = {
     "Low": {"bg": "#f0fdf4", "border": "#bbf7d0", "accent": "#15803d", "text": "#14532d"},
@@ -269,14 +289,14 @@ with st.sidebar:
 # Giant verdict banner + quick chips
 # ---------------------------------------------------------------------------
 result = composite_triage(st.session_state.vitals)
-emoji, word, action = BANNER[result.level]
+icon, word, action = BANNER[result.level]
 verdict_color = LEVEL_COLOR[result.level]
 bstyle = BANNER_STYLE[result.level]
 
 st.markdown(
     f"""
     <div class="verdict" style="background:{bstyle['bg']}; border:1px solid {bstyle['border']}; border-left:6px solid {bstyle['accent']};">
-      <div style="font-size:2.4rem; line-height:1;">{emoji}</div>
+      <div style="line-height:1; display:flex; align-items:center;">{icon}</div>
       <div style="flex:1;">
         <div class="verdict-word" style="color:{bstyle['text']};">{word}</div>
         <div class="verdict-action" style="color:{bstyle['text']};">{action}</div>
