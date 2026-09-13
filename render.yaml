@@ -1,0 +1,12 @@
+# Render Blueprint for AI Health Assistance (Streamlit)
+# Deploy: Render Dashboard -> New -> Blueprint -> pick this repo -> Apply
+# (or: everything pre-filled below, just click Create)
+services:
+  - type: web
+    name: ai-health-assistant
+    runtime: python
+    plan: free
+    rootDir: prototype
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    healthCheckPath: /

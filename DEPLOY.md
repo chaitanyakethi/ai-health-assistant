@@ -22,6 +22,40 @@ Free, public link, judges can open it on their phones.
 - The `?google=1` demo sign-in works the same on the cloud link.
 - If the build fails, check the "Manage app" → logs; the usual cause is a missing package — everything needed is already in `prototype/requirements.txt`.
 
+## Option A2 — Render (free, in addition to Streamlit Cloud)
+
+Render's free tier hosts one Streamlit service — public link, HTTPS, no credit card. The repo already contains a **`render.yaml`** blueprint, so Render auto-fills everything.
+
+### Deploy steps (≈5 minutes)
+
+1. **Go to** → https://dashboard.render.com → **Sign up with GitHub** (recommended, it links your repo access automatically)
+2. Click **"New +"** → choose **"Blueprint"**
+3. Select repository: `chaitanyakethi/ai-health-assistant` → click **"Connect"**
+4. Render reads `render.yaml` and shows the service pre-filled — click **"Apply"** (nothing to type)
+5. First build takes ~5 minutes (installs streamlit, plotly, pypdf, fpdf2, streamlit-autorefresh)
+6. 🎉 Your live link appears on the service page, like: `https://ai-health-assistant-xxxx.onrender.com`
+
+### If you prefer manual setup (no blueprint)
+
+New + → **Web Service** → connect repo, then:
+
+| Field | Value |
+|---|---|
+| Root Directory | `prototype` |
+| Runtime | Python 3 |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true` |
+| Instance Type | Free |
+
+Leave every other field default (Render injects `$PORT` automatically).
+
+### Render free-tier caveats
+
+- **Sleeps after 15 min idle** — first visitor after a nap waits ~30–60 s while it spins up. Before the demo, open the link once yourself to wake it.
+
+- **accounts (users.json) live on the server disk** — create your `chaitanya` account once after deploying; a redeploy or restart wipes it (re-creating takes 10 seconds).
+- **Manual deploy trigger**: after pushing new commits, Render auto-deploys on push. To force it: service page → **Manual Deploy** → *Deploy latest commit*.
+
 ## Option B — Run locally on stage (most reliable)
 
 No internet dependency at the expo:
