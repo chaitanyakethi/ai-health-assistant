@@ -372,6 +372,7 @@ NOW = datetime.now()
 # Medication ALARM — real sound, fires while the app is open
 # ---------------------------------------------------------------------------
 ALARM_MAX_SECONDS = 60  # ring for at most 1 minute, then auto-silence
+ALARM_WAV = str(Path(__file__).parent / "assets" / "alarm.wav")  # absolute: works locally AND on cloud
 
 if "alarm_dismissed_for" not in st.session_state:
     st.session_state.alarm_dismissed_for = ()
@@ -414,7 +415,7 @@ def _render_alarm() -> None:
         ''',
         unsafe_allow_html=True,
     )
-    st.audio("assets/alarm.wav", autoplay=True, loop=True)
+    st.audio(ALARM_WAV, autoplay=True, loop=True)
     d1, d2, _ = st.columns([1, 1, 2])
     d1.button("🔕 Dismiss", on_click=dismiss_alarm, width='stretch')
 
@@ -1101,7 +1102,7 @@ with tab_recovery:
             if st.button("▶️ Play alarm song (test)", width='stretch'):
                 st.session_state.alarm_test = True
             if st.session_state.pop("alarm_test", False):
-                st.audio("assets/alarm.wav", autoplay=True)
+                st.audio(ALARM_WAV, autoplay=True)
                 st.toast("🔔 This is the medicine alarm sound!")
 
         # -- Demo time-travel -------------------------------------------------
