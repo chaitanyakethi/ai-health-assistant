@@ -235,6 +235,7 @@ def dismiss_alarm() -> None:
     """Stop the alarm until a NEW dose becomes due (snooze-safe)."""
     st.session_state.alarm_on = False
     st.session_state.alarm_dismissed_for = tuple(sorted(m["id"] for m, _ in _due_meds(st.session_state.meds, datetime.now())))
+    st.session_state.alarm_started_at = None
 
 
 def _next_dose(meds: list[dict], now: datetime) -> tuple[str, str] | None:
@@ -336,8 +337,12 @@ NOW = datetime.now()
 # ---------------------------------------------------------------------------
 # Medication ALARM — real sound, fires while the app is open
 # ---------------------------------------------------------------------------
+ALARM_MAX_SECONDS = 60  # ring for at most 1 minute, then auto-silence
+
 if "alarm_dismissed_for" not in st.session_state:
     st.session_state.alarm_dismissed_for = ()
+if "alarm_started_at" not in st.session_state:
+    st.session_state.alarm_started_at = None
 
 # Hands-free: the page re-checks the clock every 30 s so the alarm fires
 # on its own while the app is open. Slight jitter avoids server stampedes.
@@ -346,7 +351,14 @@ if st.session_state.get("authenticated"):
 
 _alarm_due = _due_meds(st.session_state.meds, NOW)
 _alarm_ids = tuple(sorted(m["id"] for m, _ in _alarm_due))
-_alarm_sounding = bool(_alarm_due) and _alarm_ids != st.session_state.alarm_dismissed_for
+_new_alarm = bool(_alarm_due) and _alarm_ids != st.session_state.alarm_dismissed_for
+if _new_alarm and st.session_state.alarm_started_at is None:
+    st.session_state.alarm_started_at = NOW
+_alarm_run = (NOW - st.session_state.alarm_started_at).total_seconds() if st.session_state.alarm_started_at else 0.0
+_alarm_expired = _new_alarm and _alarm_run > ALARM_MAX_SECONDS
+_alarm_sounding = _new_alarm and not _alarm_expired
+if not _new_alarm:
+    st.session_state.alarm_started_at = None  # dose handled → rearm timer
 if _alarm_sounding:
     st.session_state.alarm_on = True
 
@@ -385,7 +397,13 @@ def _render_alarm() -> None:
 
 if st.session_state.get("authenticated"):
     if _alarm_sounding:
+        st.progress(min(1.0, _alarm_run / ALARM_MAX_SECONDS), text=f"🔔 Ringing — auto-silences in {max(0, ALARM_MAX_SECONDS - int(_alarm_run))}s")
         _render_alarm()
+    elif _new_alarm and _alarm_expired:
+        st.markdown(
+            '<div class="chip" style="margin-bottom:4px;">🔕 Alarm silenced after 1 minute — medicine still due. Mark it in 💊 Medications.</div>',
+            unsafe_allow_html=True,
+        )
     elif st.session_state.meds:
         nxt = _next_dose(st.session_state.meds, NOW)
         if nxt:
