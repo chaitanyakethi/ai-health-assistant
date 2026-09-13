@@ -246,6 +246,54 @@ def _due_reviews(plan: list[dict], today: date) -> list[dict]:
     return [r for r in plan if not r["done"] and r["due"] <= today]
 
 
+def _example_case(disease: str, medicine: str, started_days_ago: int, history: list[tuple[int, str]]) -> dict:
+    """Pre-played recovery case for one-click demos.
+
+    ``history`` is a list of (month, verdict) pairs already reviewed.
+    Re-check entries are appended the same way the live form does.
+    """
+    start = date.today() - timedelta(days=started_days_ago)
+    plan = _build_plan(start)
+    hist: list[dict] = []
+    status = "in_treatment"
+    for months, verdict in history:
+        review = next(r for r in plan if r["months"] == months and not r["done"])
+        review["done"] = True
+        review["outcome"] = verdict
+        hist.append({"months": months, "on": _add_months(start, months), "verdict": verdict})
+        if verdict == "Cured":
+            status = "cured"
+        elif months >= 6 or verdict == "Not cured":
+            plan.append({"months": months + 3, "due": _add_months(review["due"], 3), "done": False, "outcome": None})
+    return {
+        "disease": disease,
+        "medicine": medicine,
+        "start": start,
+        "plan": plan,
+        "status": status,
+        "history": hist,
+    }
+
+
+EXAMPLE_CASES = {
+    "1️⃣ Month-1 check-up DUE": (
+        "Type 2 Diabetes", "Metformin 500mg", 32, []
+    ),
+    "2️⃣ On track (started 10 days ago)": (
+        "Hypertension (Stage 1)", "Amlodipine 5mg", 10, []
+    ),
+    "3️⃣ Month-6 cure check DUE": (
+        "Hypothyroidism", "Levothyroxine 50mcg", 190, [(1, "Improving — continue medicine")]
+    ),
+    "4️⃣ Not cured → 3-month re-check DUE": (
+        "Pulmonary Tuberculosis", "Anti-TB therapy (4-drug)", 305, [(1, "Improving — continue medicine"), (6, "Not cured")]
+    ),
+    "5️⃣ Already CURED (discharged)": (
+        "Vitamin D Deficiency", "Cholecalciferol 60K IU weekly", 250, [(1, "Improving — continue medicine"), (6, "Cured")]
+    ),
+}
+
+
 NOW = datetime.now()
 
 # ---------------------------------------------------------------------------
@@ -654,6 +702,15 @@ with tab_recovery:
                 st.rerun()
         st.info("👆 The plan schedules a **month-1 status check** and a **month-6 cure check** automatically.")
 
+        with st.expander("🧪 Load an example case (one-click demo)"):
+            st.caption("Five pre-played cases — each lands at a different moment of the recovery loop.")
+            ex_cols = st.columns(2)
+            for i, (label, (disease, medicine, days, history)) in enumerate(EXAMPLE_CASES.items()):
+                if ex_cols[i % 2].button(label, width='stretch'):
+                    st.session_state.recovery = _example_case(disease, medicine, days, history)
+                    st.session_state.clock = date.today()
+                    st.rerun()
+
     else:
         due_reviews = _due_reviews(rec["plan"], clock)
 
@@ -764,6 +821,14 @@ with tab_recovery:
                 st.session_state.recovery = None
                 st.session_state.clock = date.today()
                 st.rerun()
+            st.divider()
+            st.caption("Or jump straight into a different story:")
+            ex_cols2 = st.columns(2)
+            for i, (label, (disease, medicine, days, history)) in enumerate(EXAMPLE_CASES.items()):
+                if ex_cols2[i % 2].button(label, key=f"swap_{i}", width='stretch'):
+                    st.session_state.recovery = _example_case(disease, medicine, days, history)
+                    st.session_state.clock = date.today()
+                    st.rerun()
 
 # === TAB 5 — REPORT TRANSLATOR ==============================================
 with tab_report:
