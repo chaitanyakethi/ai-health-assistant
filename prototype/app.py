@@ -252,17 +252,17 @@ st.markdown(
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.markdown('<div class="chip">👀 Vitals live</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chip" style="background:#fff1f2; border-color:#fecdd3; color:#9f1239;">👀 Vitals live</div>', unsafe_allow_html=True)
 with c2:
     nxt = _next_dose(st.session_state.meds, NOW)
     st.markdown(
-        f'<div class="chip">⏰ Next pill: {nxt[1] if nxt else "none set"}</div>',
+        f'<div class="chip" style="background:#eff6ff; border-color:#bfdbfe; color:#1e40af;">⏰ Next pill: {nxt[1] if nxt else "none set"}</div>',
         unsafe_allow_html=True,
     )
 with c3:
-    st.markdown('<div class="chip">👨‍⚕️ AI Doctor online 24/7</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chip" style="background:#f0fdfa; border-color:#99f6e4; color:#115e59;">👨‍⚕️ AI Doctor online 24/7</div>', unsafe_allow_html=True)
 with c4:
-    st.markdown('<div class="chip">📄 Lab jargon ➜ plain English</div>', unsafe_allow_html=True)
+    st.markdown('<div class="chip" style="background:#f5f3ff; border-color:#ddd6fe; color:#5b21b6;">📄 Lab jargon ➜ plain English</div>', unsafe_allow_html=True)
 st.write("")
 
 # ---------------------------------------------------------------------------
@@ -312,9 +312,10 @@ with tab_vitals:
                 level, _ = assess_vital(value, key)
                 color, _ = STATUS_COLOR[level]
                 with col:
+                    tint = {Level.HEALTHY: "#f0fdf4", Level.CAUTION: "#fffbeb", Level.URGENT: "#fef2f2"}[level]
                     st.markdown(
                         f"""
-                        <div class="vital-card" style="border-top-color:{color};">
+                        <div class="vital-card" style="border-top-color:{color}; background:{tint};">
                           <div class="vital-label">{label}</div>
                           <div class="vital-value" style="color:{color};">{value:g}
                             <span style="font-size:.95rem; opacity:.55; font-weight:600;">{unit}</span></div>
@@ -393,7 +394,7 @@ with tab_meds:
     if nxt:
         st.markdown(
             f"""
-            <div class="verdict" style="background:#fff; border:1px solid #e2e8f0; border-left:6px solid #2563eb;">
+            <div class="verdict" style="background:#eff6ff; border:1px solid #bfdbfe; border-left:6px solid #2563eb;">
               <div style="font-size:2.2rem; line-height:1;">⏰</div>
               <div style="flex:1;">
                 <div class="verdict-word" style="color:#1e3a8a;">NEXT DOSE</div>
@@ -430,6 +431,8 @@ with tab_meds:
         now_m = datetime.now()
         for med in st.session_state.meds:
             state = _med_state(med, now_m)
+            edge = {"taken": "#15803d", "due": "#d97706", "missed": "#dc2626", "upcoming": "#2563eb"}[state]
+            tint = {"taken": "#f0fdf4", "due": "#fffbeb", "missed": "#fef2f2", "upcoming": "#eff6ff"}[state]
             badge = {
                 "taken": '<span class="tag" style="background:#15803d;">✅ TAKEN</span>',
                 "due": '<span class="tag" style="background:#d97706;">⏰ DUE NOW</span>',
@@ -439,7 +442,7 @@ with tab_meds:
             times_text = " · ".join(med["times"])
             st.markdown(
                 f"""
-                <div class="med-card" style="border-left-color:{"#15803d" if state == "taken" else "#d97706" if state == "due" else "#dc2626" if state == "missed" else "#2563eb"};">
+                <div class="med-card" style="border-left-color:{edge}; background:{tint};">
                   <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div class="med-name">{med["icon"]} {med["name"]}</div>
                     {badge}
@@ -494,7 +497,7 @@ with tab_meds:
 with tab_doc:
     st.markdown(
         """
-        <div class="verdict" style="background:#fff; border:1px solid #e2e8f0; border-left:6px solid #0d9488;">
+        <div class="verdict" style="background:#f0fdfa; border:1px solid #99f6e4; border-left:6px solid #0d9488;">
           <div style="font-size:2.2rem; line-height:1;">🩺</div>
           <div style="flex:1;">
             <div class="verdict-word" style="font-size:1.6rem; color:#134e4a;">AI DOCTOR <span class="doc-online"></span> ONLINE</div>
