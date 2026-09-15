@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -252,6 +252,14 @@ def _med_state(med: dict, now: datetime) -> str:
     return "upcoming"
 
 
+IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def _ist_now() -> datetime:
+    """IST wall-clock as a naive datetime — same numbers on the cloud (UTC) and locally."""
+    return datetime.now(timezone.utc).replace(tzinfo=None) + IST_OFFSET
+
+
 def _due_meds(meds: list[dict], now: datetime) -> list[tuple[dict, str]]:
     """Meds whose time has arrived today and are still unmarked → [(med, HH:MM)]."""
     due: list[tuple[dict, str]] = []
@@ -268,7 +276,7 @@ def _due_meds(meds: list[dict], now: datetime) -> list[tuple[dict, str]]:
 def dismiss_alarm() -> None:
     """Stop the alarm until a NEW dose becomes due (snooze-safe)."""
     st.session_state.alarm_on = False
-    st.session_state.alarm_dismissed_for = tuple(sorted(m["id"] for m, _ in _due_meds(st.session_state.meds, datetime.now())))
+    st.session_state.alarm_dismissed_for = tuple(sorted(m["id"] for m, _ in _due_meds(st.session_state.meds, _ist_now())))
     st.session_state.alarm_started_at = None
 
 
@@ -324,7 +332,7 @@ def _example_case(disease: str, medicine: str, started_days_ago: int, history: l
     ``history`` is a list of (month, verdict) pairs already reviewed.
     Re-check entries are appended the same way the live form does.
     """
-    start = date.today() - timedelta(days=started_days_ago)
+    start = _ist_now().date() - timedelta(days=started_days_ago)
     plan = _build_plan(start)
     hist: list[dict] = []
     status = "in_treatment"
@@ -366,7 +374,7 @@ EXAMPLE_CASES = {
 }
 
 
-NOW = datetime.now()
+NOW = _ist_now()
 
 # ---------------------------------------------------------------------------
 # Medication ALARM — real sound, fires while the app is open
@@ -420,7 +428,7 @@ def _render_alarm() -> None:
     d1.button("🔕 Dismiss", on_click=dismiss_alarm, width='stretch')
 
     def _take_all_due() -> None:
-        now = datetime.now()
+        now = _ist_now()
         for med, _t in _due_meds(st.session_state.meds, now):
             med["taken"].add(now.date())
             med["missed"].discard(now.date())
@@ -768,7 +776,7 @@ with tab_vitals:
 
 # === TAB 2 — MEDICATION REMINDERS ===========================================
 with tab_meds:
-    now_med = datetime.now()
+    now_med = _ist_now()
     nxt = _next_dose(st.session_state.meds, now_med)
 
     # Headline: next dose countdown — the thing you glance at.
@@ -829,7 +837,7 @@ with tab_meds:
         st.markdown("##### 💊 Today's schedule")
         if not st.session_state.meds:
             st.info("No medicines yet — add one on the left.")
-        now_m = datetime.now()
+        now_m = _ist_now()
         for med in st.session_state.meds:
             state = _med_state(med, now_m)
             edge = {"taken": "#15803d", "due": "#d97706", "missed": "#dc2626", "upcoming": "#2563eb"}[state]
@@ -964,7 +972,7 @@ with tab_doc:
 # === TAB 4 — RECOVERY TRACKER ===============================================
 with tab_recovery:
     rec = st.session_state.recovery
-    clock = st.session_state.get("clock", date.today())
+    clock = st.session_state.get("clock", _ist_now().date())
 
     # -- No active case → enrollment form ------------------------------------
     if rec is None:
@@ -981,7 +989,7 @@ with tab_recovery:
             e1, e2 = st.columns(2)
             disease = e1.text_input("🦠 Disease / condition", placeholder="e.g. Type 2 Diabetes")
             medicine = e2.text_input("💊 Medicine prescribed", placeholder="e.g. Metformin 500mg")
-            start = st.date_input("📅 Treatment start date", value=date.today())
+            start = st.date_input("📅 Treatment start date", value=_ist_now().date())
             if st.form_submit_button("🚀 Start recovery plan", type="primary") and disease.strip() and medicine.strip():
                 st.session_state.recovery = {
                     "disease": disease.strip(),
@@ -991,7 +999,7 @@ with tab_recovery:
                     "status": "in_treatment",
                     "history": [],
                 }
-                st.session_state.clock = date.today()
+                st.session_state.clock = _ist_now().date()
                 st.rerun()
         st.info("👆 The plan schedules a **month-1 status check** and a **month-6 cure check** automatically.")
 
@@ -1001,7 +1009,7 @@ with tab_recovery:
             for i, (label, (disease, medicine, days, history)) in enumerate(EXAMPLE_CASES.items()):
                 if ex_cols[i % 2].button(label, width='stretch'):
                     st.session_state.recovery = _example_case(disease, medicine, days, history)
-                    st.session_state.clock = date.today()
+                    st.session_state.clock = _ist_now().date()
                     st.rerun()
 
     else:
@@ -1116,11 +1124,11 @@ with tab_recovery:
                 st.session_state.clock = clock + timedelta(days=183)
                 st.rerun()
             if t3.button("Reset to today", width='stretch'):
-                st.session_state.clock = date.today()
+                st.session_state.clock = _ist_now().date()
                 st.rerun()
             if st.button("🗑️ Discharge & start a new case", width='stretch'):
                 st.session_state.recovery = None
-                st.session_state.clock = date.today()
+                st.session_state.clock = _ist_now().date()
                 st.rerun()
             st.divider()
             st.caption("Or jump straight into a different story:")
@@ -1128,7 +1136,7 @@ with tab_recovery:
             for i, (label, (disease, medicine, days, history)) in enumerate(EXAMPLE_CASES.items()):
                 if ex_cols2[i % 2].button(label, key=f"swap_{i}", width='stretch'):
                     st.session_state.recovery = _example_case(disease, medicine, days, history)
-                    st.session_state.clock = date.today()
+                    st.session_state.clock = _ist_now().date()
                     st.rerun()
 
 # === TAB 5 — REPORT TRANSLATOR ==============================================

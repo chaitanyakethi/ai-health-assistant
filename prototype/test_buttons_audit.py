@@ -30,10 +30,13 @@ def fresh() -> AppTest:
     return at
 
 
+CREATED_USER = "audit_user"  # replaced by signup test with a unique name
+
+
 def authed() -> AppTest:
     """Fresh session that actually LOGS IN as the audit user."""
     a = fresh()
-    [t for t in a.text_input if t.label == "Username"][0].set_value("audit_user").run(timeout=30)
+    [t for t in a.text_input if t.label == "Username"][0].set_value(CREATED_USER).run(timeout=30)
     [t for t in a.text_input if t.label == "Password"][0].set_value("audit1234").run(timeout=30)
     btn(a, "Login").set_value(True).run(timeout=30)
     assert not a.exception
@@ -82,6 +85,7 @@ check("signup: mismatched passwords rejected", t_signup_mismatch_rejected)
 def t_signup_login() -> AppTest:
     import time as _time
 
+    global CREATED_USER
     unique = f"audit_{int(_time.time())}"
     a = fresh()
     [t for t in a.text_input if t.label == "Full name"][0].set_value("Audit User").run(timeout=30)
@@ -90,6 +94,7 @@ def t_signup_login() -> AppTest:
     [t for t in a.text_input if t.label == "Confirm password"][0].set_value("audit1234").run(timeout=30)
     btn(a, "Create account").set_value(True).run(timeout=30)
     assert is_authed(a), "signup did not authenticate"
+    CREATED_USER = unique
     return a
 
 
@@ -100,7 +105,7 @@ check("signup + auto-login", t_signup_login)
 def t_login_existing() -> None:
     global AUDIT
     a = fresh()
-    [t for t in a.text_input if t.label == "Username"][0].set_value("audit_user").run(timeout=30)
+    [t for t in a.text_input if t.label == "Username"][0].set_value(CREATED_USER).run(timeout=30)
     [t for t in a.text_input if t.label == "Password"][0].set_value("audit1234").run(timeout=30)
     btn(a, "Login").set_value(True).run(timeout=30)
     assert is_authed(a)
@@ -160,10 +165,12 @@ check("vitals: all 6 sliders move and update verdict", t_vitals_sliders)
 def t_med_add() -> None:
     b = a
     [t for t in b.text_input if t.label == "Medicine name"][0].set_value("Audit Pill 5mg").run(timeout=30)
+    [t for t in b.text_input if "type a time manually" in (t.label or "")][0].set_value("07:15").run(timeout=30)
     btn(b, "➕ Add").set_value(True).run(timeout=30)
     assert not b.exception
-    names = [m["name"] for m in b.session_state["meds"]]
-    assert "Audit Pill 5mg" in names
+    added = [m for m in b.session_state["meds"] if m["name"] == "Audit Pill 5mg"]
+    assert added, "medicine not added"
+    assert added[0]["times"] == ["07:15"], f"expected ['07:15'], got {added[0]['times']}"
 
 
 check("meds: Add button adds medicine", t_med_add)
@@ -306,6 +313,7 @@ check("AI doctor: free-text input -> Moderate for fever", t_chat_free_text)
 
 def t_med_multiselect_times() -> None:
     b = a
+    [t for t in b.text_input if t.label == "Medicine name"][0].set_value("Audit Pill 5mg").run(timeout=30)
     ms = [m for m in b.multiselect if "Times per day" in (m.label or "")]
     assert ms, "times multiselect not found"
     ms[0].set_value(["08:00", "14:30", "22:00"]).run(timeout=30)
